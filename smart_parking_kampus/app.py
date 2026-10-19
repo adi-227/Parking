@@ -54,7 +54,7 @@ st.set_page_config(
 db_manager.init_db()
 
 # ==============================================================================
-# TEMA & GAYA VISUAL (MODERN CAMPUS DASHBOARD - DARK THEME)
+# TEMA & GAYA VISUAL (ADAPTIVE LIGHT & DARK THEME — PREMIUM CAMPUS DASHBOARD)
 # ==============================================================================
 st.markdown("""
 <style>
@@ -64,10 +64,10 @@ st.markdown("""
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
-    /* Page Canvas */
+    /* Page Canvas: Menyesuaikan Otomatis Mode Light & Dark */
     .stApp {
-        background-color: #0E1117 !important;
-        color: #F3F4F6 !important;
+        background-color: var(--background-color) !important;
+        color: var(--text-color) !important;
     }
     
     .main .block-container {
@@ -79,34 +79,43 @@ st.markdown("""
     /* ==========================================================================
        CARD NAVIGATION BAR (TAB LIST UTAMA JADI CARD BESAR & MEWAH)
        ========================================================================== */
-    div[data-baseweb="tab-list"] {
-        background: #161B26 !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    [data-testid="stTabs"] [data-baseweb="tab-list"] {
+        background-color: var(--secondary-background-color) !important;
+        border: 1px solid rgba(128, 128, 128, 0.22) !important;
         border-radius: 16px !important;
         padding: 8px !important;
-        gap: 10px !important;
-        margin-top: 6px !important;
+        gap: 12px !important;
+        margin-top: 8px !important;
         margin-bottom: 24px !important;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08) !important;
         display: flex !important;
         width: 100% !important;
         flex-wrap: wrap !important;
     }
 
-    /* Hilangkan garis border/underline default Streamlit */
-    div[data-baseweb="tab-border"],
-    div[data-baseweb="tab-highlight"] {
+    /* HAPUS SEMUA UNDERLINE / BORDER BAWAAN STREAMLIT */
+    [data-testid="stTabs"] [data-baseweb="tab-highlight"],
+    [data-testid="stTabs"] [data-baseweb="tab-border"],
+    [data-baseweb="tab-highlight"],
+    [data-baseweb="tab-border"],
+    div[data-baseweb="tab-highlight"],
+    div[data-baseweb="tab-border"] {
         display: none !important;
+        height: 0px !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        border: none !important;
     }
 
-    /* Setiap Tombol Tab di dalam Card jadi Kartu Navigasi yang Besar & Mewah */
-    button[data-baseweb="tab"] {
+    /* Setiap Tombol Tab di dalam Card jadi Kartu Navigasi yang Besar & Empuk */
+    [data-testid="stTabs"] button[data-baseweb="tab"],
+    [data-testid="stTabs"] [data-baseweb="tab-list"] button {
         flex: 1 1 200px !important;
-        background: rgba(255, 255, 255, 0.035) !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        background-color: var(--background-color) !important;
+        border: 1.5px solid rgba(128, 128, 128, 0.22) !important;
         border-radius: 12px !important;
         padding: 14px 20px !important;
-        color: #94A3B8 !important;
+        color: var(--text-color) !important;
         font-size: 0.98rem !important;
         font-weight: 700 !important;
         letter-spacing: 0.2px !important;
@@ -116,36 +125,35 @@ st.markdown("""
         text-align: center !important;
         transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
         cursor: pointer !important;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08) !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04) !important;
         white-space: nowrap !important;
         min-height: 52px !important;
     }
 
     /* Hover Tab Card */
-    button[data-baseweb="tab"]:hover {
-        background: rgba(37, 99, 235, 0.18) !important;
-        border-color: rgba(37, 99, 235, 0.45) !important;
-        color: #FFFFFF !important;
+    [data-testid="stTabs"] button[data-baseweb="tab"]:hover,
+    [data-testid="stTabs"] [data-baseweb="tab-list"] button:hover {
+        border-color: #2563EB !important;
+        color: #2563EB !important;
         transform: translateY(-2px) !important;
-        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.25) !important;
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.2) !important;
     }
 
     /* Active Tab Card: Gradien Biru Mewah dengan Glow */
-    button[data-baseweb="tab"][aria-selected="true"] {
+    [data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"],
+    [data-testid="stTabs"] [data-baseweb="tab-list"] button[aria-selected="true"] {
         background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%) !important;
-        border: 1.5px solid #60A5FA !important;
+        border: 1.5px solid #3B82F6 !important;
         color: #FFFFFF !important;
         font-weight: 800 !important;
         box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45) !important;
         transform: translateY(-1px) !important;
     }
 
-    button[data-baseweb="tab"] div,
-    button[data-baseweb="tab"] p,
-    button[data-baseweb="tab"] span {
-        font-size: 0.98rem !important;
-        font-weight: 700 !important;
-        color: inherit !important;
+    /* Teks Tab Aktif WAJIB Putih */
+    [data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * {
+        color: #FFFFFF !important;
+        font-weight: 800 !important;
     }
 
     /* Hero Header */
@@ -199,13 +207,14 @@ st.markdown("""
         display: flex;
         align-items: center;
         justify-content: space-between;
-        background: #161B26;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: var(--secondary-background-color) !important;
+        border: 1px solid rgba(128, 128, 128, 0.2) !important;
         border-radius: 14px;
         padding: 12px 18px;
         margin-bottom: 20px;
         gap: 8px;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        color: var(--text-color);
     }
     .step-card {
         display: flex;
@@ -217,13 +226,13 @@ st.markdown("""
         transition: all 0.2s ease;
     }
     .step-card.active {
-        background: rgba(37, 99, 235, 0.15);
-        border: 1.5px solid #2563eb;
+        background: rgba(37, 99, 235, 0.12) !important;
+        border: 1.5px solid #2563eb !important;
         box-shadow: 0 0 12px rgba(37, 99, 235, 0.2);
     }
     .step-card.completed {
-        background: rgba(16, 185, 129, 0.15);
-        border: 1.5px solid #10b981;
+        background: rgba(16, 185, 129, 0.12) !important;
+        border: 1.5px solid #10b981 !important;
     }
     .step-card.idle {
         opacity: 0.55;
@@ -262,16 +271,15 @@ st.markdown("""
         font-weight: 700;
         letter-spacing: 0.5px;
         text-transform: uppercase;
-        color: #94A3B8;
+        opacity: 0.75;
     }
     .step-title {
         font-size: 0.88rem;
         font-weight: 700;
         line-height: 1.2;
-        color: #F3F4F6;
     }
     .step-arrow {
-        color: #64748B;
+        opacity: 0.6;
         font-weight: bold;
         font-size: 1.1rem;
         user-select: none;
@@ -287,54 +295,56 @@ st.markdown("""
     }
 
     div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-        background: #161B26 !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        background: var(--secondary-background-color) !important;
+        border: 1px solid rgba(128, 128, 128, 0.22) !important;
         border-radius: 12px !important;
         padding: 12px 14px !important;
         margin: 0 !important;
         cursor: pointer !important;
         transition: all 0.2s ease !important;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
+        color: var(--text-color) !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04) !important;
     }
 
     div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
-        border-color: rgba(37, 99, 235, 0.4) !important;
-        background: rgba(37, 99, 235, 0.1) !important;
+        border-color: rgba(37, 99, 235, 0.5) !important;
+        background: rgba(37, 99, 235, 0.08) !important;
         transform: translateY(-1px) !important;
     }
 
     div[data-testid="stRadio"] > div[role="radiogroup"] > label[data-checked="true"],
     div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
         border: 1.5px solid #2563EB !important;
-        background: rgba(37, 99, 235, 0.18) !important;
-        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25) !important;
+        background: rgba(37, 99, 235, 0.12) !important;
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.2) !important;
     }
 
     /* Metric Cards */
     div[data-testid="stMetric"] {
-        background-color: #161B26 !important;
+        background-color: var(--secondary-background-color) !important;
         padding: 14px 18px !important;
         border-radius: 14px !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2) !important;
+        border: 1px solid rgba(128, 128, 128, 0.2) !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
         transition: transform 0.2s ease, box-shadow 0.2s ease !important;
     }
     div[data-testid="stMetric"]:hover {
         transform: translateY(-2px) !important;
         box-shadow: 0 6px 18px rgba(37, 99, 235, 0.15) !important;
-        border-color: rgba(37, 99, 235, 0.35) !important;
+        border-color: rgba(37, 99, 235, 0.4) !important;
     }
 
     /* Ticket Card Luxury Modern */
     .ticket-card {
-        background: #161B26;
-        border: 2px solid #2563eb;
+        background: var(--secondary-background-color) !important;
+        border: 2px solid #2563eb !important;
         border-radius: 16px;
         padding: 22px;
         margin-bottom: 16px;
-        box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.25);
+        box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.18);
         position: relative;
         overflow: hidden;
+        color: var(--text-color);
     }
     .ticket-card::before {
         content: "";
@@ -346,36 +356,38 @@ st.markdown("""
         background: linear-gradient(90deg, #2563eb, #38bdf8, #10b981);
     }
     .ticket-card-invalid {
-        background: #161B26;
-        border: 2px solid #ef4444;
+        background: var(--secondary-background-color) !important;
+        border: 2px solid #ef4444 !important;
         border-radius: 16px;
         padding: 26px 20px;
         text-align: center;
         margin-bottom: 16px;
-        box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.2);
+        box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.18);
+        color: var(--text-color);
     }
     .empty-state-card {
-        background: #161B26;
-        border: 2px dashed rgba(255, 255, 255, 0.12);
+        background: var(--secondary-background-color) !important;
+        border: 2px dashed rgba(128, 128, 128, 0.3) !important;
         border-radius: 16px;
         padding: 36px 20px;
         text-align: center;
         margin-bottom: 16px;
-        color: #E2E8F0;
+        color: var(--text-color);
     }
     .empty-title {
         font-size: 1.15rem;
         font-weight: 700;
         margin-top: 8px;
         margin-bottom: 4px;
-        color: #FFFFFF;
+        color: var(--text-color);
     }
     .empty-sub {
         font-size: 0.88rem;
-        color: #94A3B8;
+        opacity: 0.75;
         max-width: 440px;
         margin: 0 auto 16px auto;
         line-height: 1.5;
+        color: var(--text-color);
     }
     .empty-pills {
         display: flex;
@@ -384,12 +396,12 @@ st.markdown("""
         flex-wrap: wrap;
     }
     .pill-mini {
-        background: rgba(255, 255, 255, 0.08);
+        background: rgba(128, 128, 128, 0.15);
         padding: 4px 10px;
         border-radius: 9999px;
         font-size: 0.75rem;
         font-weight: 600;
-        color: #E2E8F0;
+        color: var(--text-color);
     }
 
     /* Authentic Indonesian License Plate */
@@ -420,11 +432,11 @@ st.markdown("""
         font-size: 0.88rem;
         letter-spacing: 0.2px;
     }
-    .status-dosen { background: rgba(16, 185, 129, 0.2); color: #4ADE80; border: 1.5px solid rgba(74, 222, 128, 0.4); }
-    .status-mhs { background: rgba(37, 99, 235, 0.2); color: #93C5FD; border: 1.5px solid rgba(147, 197, 253, 0.4); }
-    .status-tamu { background: rgba(245, 158, 11, 0.2); color: #FCD34D; border: 1.5px solid rgba(252, 211, 77, 0.4); }
-    .status-invalid { background: rgba(239, 68, 68, 0.2); color: #FCA5A5; border: 1.5px solid rgba(252, 165, 165, 0.4); }
-    .status-uncertain { background: rgba(234, 179, 8, 0.2); color: #FDE047; border: 1.5px solid rgba(253, 224, 71, 0.4); }
+    .status-dosen { background: rgba(16, 185, 129, 0.18); color: #10B981; border: 1.5px solid rgba(16, 185, 129, 0.4); }
+    .status-mhs { background: rgba(37, 99, 235, 0.18); color: #2563EB; border: 1.5px solid rgba(37, 99, 235, 0.4); }
+    .status-tamu { background: rgba(245, 158, 11, 0.18); color: #D97706; border: 1.5px solid rgba(245, 158, 11, 0.4); }
+    .status-invalid { background: rgba(239, 68, 68, 0.18); color: #DC2626; border: 1.5px solid rgba(239, 68, 68, 0.4); }
+    .status-uncertain { background: rgba(234, 179, 8, 0.18); color: #CA8A04; border: 1.5px solid rgba(234, 179, 8, 0.4); }
 
     /* Action Buttons */
     div.stButton > button {
@@ -451,45 +463,44 @@ st.markdown("""
 
     div.stButton > button[kind="secondary"],
     div.stButton > button[data-testid="baseButton-secondary"] {
-        background: #1E293B !important;
-        border: 1px solid rgba(255, 255, 255, 0.12) !important;
-        color: #E2E8F0 !important;
+        background: var(--secondary-background-color) !important;
+        border: 1px solid rgba(128, 128, 128, 0.25) !important;
+        color: var(--text-color) !important;
     }
 
     div.stButton > button[kind="secondary"]:hover {
-        background: #334155 !important;
-        border-color: rgba(255,255,255,0.25) !important;
+        border-color: #2563EB !important;
         transform: translateY(-1px) !important;
     }
 
     /* Forms and Tables */
     div[data-testid="stForm"] {
-        background: #161B26 !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        background: var(--secondary-background-color) !important;
+        border: 1px solid rgba(128, 128, 128, 0.2) !important;
         border-radius: 16px !important;
         padding: 22px !important;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.2) !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05) !important;
     }
 
     div[data-testid="stDataFrame"] {
         border-radius: 14px !important;
         overflow: hidden !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.2) !important;
+        border: 1px solid rgba(128, 128, 128, 0.2) !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05) !important;
     }
 
     /* Sidebar Styling */
     section[data-testid="stSidebar"] {
-        background-color: #11151F !important;
-        border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+        background-color: var(--secondary-background-color) !important;
+        border-right: 1px solid rgba(128, 128, 128, 0.2) !important;
     }
 
     /* Responsive adjustments */
     @media (max-width: 768px) {
-        div[data-baseweb="tab-list"] {
+        [data-testid="stTabs"] [data-baseweb="tab-list"] {
             flex-direction: column !important;
         }
-        button[data-baseweb="tab"] {
+        [data-testid="stTabs"] button[data-baseweb="tab"] {
             width: 100% !important;
             flex: 1 1 100% !important;
         }

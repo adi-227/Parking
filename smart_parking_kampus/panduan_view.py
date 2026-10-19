@@ -36,17 +36,17 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
    PANDUAN & STATUS AI - DESIGN SYSTEM (DARK THEME)
    ============================================================================== */
 :root {{
-    --guide-bg: #0E1117;
-    --guide-card-bg: #161B26;
-    --guide-card-border: rgba(255, 255, 255, 0.08);
+    --guide-bg: var(--background-color, #0E1117);
+    --guide-card-bg: var(--secondary-background-color, #161B26);
+    --guide-card-border: rgba(128, 128, 128, 0.2);
     --guide-accent-blue: #2563EB;
     --guide-hover-blue: #1D4ED8;
-    --guide-text-primary: #F3F4F6;
-    --guide-text-secondary: #8B93A7;
-    --guide-success-green: #4ADE80;
-    --guide-success-bg: rgba(31, 107, 58, 0.35);
-    --guide-gold: #C9A96E;
-    --guide-gold-bg: rgba(201, 169, 110, 0.18);
+    --guide-text-primary: var(--text-color, #F3F4F6);
+    --guide-text-secondary: rgba(128, 128, 128, 0.85);
+    --guide-success-green: #10B981;
+    --guide-success-bg: rgba(16, 185, 129, 0.15);
+    --guide-gold: #D97706;
+    --guide-gold-bg: rgba(217, 119, 6, 0.15);
     --guide-radius: 14px;
 }}
 
@@ -121,7 +121,7 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
 .status-title {{
     font-size: 0.84rem;
     font-weight: 700;
-    color: #F9FAFB;
+    color: var(--guide-text-primary);
 }}
 
 .status-meta {{
@@ -190,7 +190,7 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
 .section-heading h3 {{
     font-size: 1.18rem;
     font-weight: 800;
-    color: #FFFFFF;
+    color: var(--guide-text-primary);
     margin: 0;
 }}
 
@@ -225,7 +225,7 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
     height: 44px;
     border-radius: 50%;
     background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%);
-    border: 3px solid #0E1117;
+    border: 3px solid var(--guide-bg);
     box-shadow: 0 0 12px rgba(37, 99, 235, 0.5);
     display: flex;
     align-items: center;
@@ -266,7 +266,7 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
     gap: 8px;
     font-size: 0.98rem;
     font-weight: 700;
-    color: #FFFFFF;
+    color: var(--guide-text-primary);
 }}
 
 .tech-chip-group {{
@@ -289,7 +289,8 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
 
 .timeline-card-desc {{
     font-size: 0.86rem;
-    color: #D1D5DB;
+    color: var(--guide-text-primary);
+    opacity: 0.88;
     line-height: 1.55;
     margin: 0;
 }}
@@ -333,10 +334,10 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    background: #0E1117;
+    background: var(--guide-bg);
     border-radius: 10px;
     padding: 12px 14px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--guide-card-border);
 }}
 
 .ocr-plate-box {{
@@ -350,14 +351,14 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #9CA3AF;
+    color: var(--guide-text-secondary);
 }}
 
 .plate-raw {{
     font-family: Consolas, monospace;
     font-size: 1.05rem;
     font-weight: 700;
-    color: #F87171;
+    color: #EF4444;
     letter-spacing: 0.04em;
 }}
 
@@ -365,21 +366,21 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
     font-family: Consolas, monospace;
     font-size: 1.05rem;
     font-weight: 700;
-    color: #4ADE80;
+    color: #10B981;
     letter-spacing: 0.04em;
 }}
 
 .hl-yellow {{
-    background: rgba(251, 191, 36, 0.25);
-    color: #FCD34D;
+    background: rgba(245, 158, 11, 0.25);
+    color: #D97706;
     padding: 0 3px;
     border-radius: 4px;
     border-bottom: 2px solid #F59E0B;
 }}
 
 .hl-green {{
-    background: rgba(74, 222, 128, 0.25);
-    color: #86EFAC;
+    background: rgba(16, 185, 129, 0.25);
+    color: #059669;
     padding: 0 3px;
     border-radius: 4px;
     border-bottom: 2px solid #10B981;
@@ -392,7 +393,7 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
 
 .ocr-explanation {{
     font-size: 0.78rem;
-    color: #9CA3AF;
+    color: var(--guide-text-secondary);
     margin-top: 10px;
     line-height: 1.4;
 }}
@@ -477,7 +478,7 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
 .tariff-role {{
     font-size: 1.05rem;
     font-weight: 800;
-    color: #FFFFFF;
+    color: var(--guide-text-primary);
     margin-bottom: 4px;
 }}
 
@@ -493,11 +494,11 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
 }}
 
 .tariff-price.mhs {{
-    color: #60A5FA;
+    color: #3B82F6;
 }}
 
 .tariff-price.guest {{
-    color: #FBBF24;
+    color: #F59E0B;
 }}
 
 .tariff-desc {{
@@ -525,20 +526,20 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
 }}
 
 .tech-table th {{
-    background: #0E1117;
-    color: #9CA3AF;
+    background: var(--guide-bg);
+    color: var(--guide-text-secondary);
     font-weight: 700;
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     padding: 12px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--guide-card-border);
 }}
 
 .tech-table td {{
     padding: 12px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-    color: #E5E7EB;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.12);
+    color: var(--guide-text-primary);
     vertical-align: middle;
 }}
 
@@ -547,11 +548,11 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
 }}
 
 .tech-table tr:nth-child(even) {{
-    background: rgba(255, 255, 255, 0.015);
+    background: rgba(128, 128, 128, 0.04);
 }}
 
 .tech-table tr:hover {{
-    background: rgba(37, 99, 235, 0.06);
+    background: rgba(37, 99, 235, 0.08);
 }}
 
 .table-tech-chip {{
