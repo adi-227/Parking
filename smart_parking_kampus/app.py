@@ -1,4 +1,5 @@
 import os
+import sys
 import re
 import cv2
 import threading
@@ -6,6 +7,10 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 from datetime import datetime
+
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+if APP_DIR not in sys.path:
+    sys.path.insert(0, APP_DIR)
 
 import importlib
 import parking_logic
@@ -49,18 +54,100 @@ st.set_page_config(
 db_manager.init_db()
 
 # ==============================================================================
-# TEMA & GAYA VISUAL (MODERN CAMPUS DASHBOARD)
-# ==============================================================================
-# ==============================================================================
-# TEMA & GAYA VISUAL (MODERN CAMPUS DASHBOARD)
+# TEMA & GAYA VISUAL (MODERN CAMPUS DASHBOARD - DARK THEME)
 # ==============================================================================
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    
     html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    /* Page Canvas */
+    .stApp {
+        background-color: #0E1117 !important;
+        color: #F3F4F6 !important;
     }
     
+    .main .block-container {
+        max-width: 1320px !important;
+        padding-top: 1.5rem !important;
+        padding-bottom: 3.5rem !important;
+    }
+
+    /* ==========================================================================
+       CARD NAVIGATION BAR (TAB LIST UTAMA JADI CARD BESAR & MEWAH)
+       ========================================================================== */
+    div[data-baseweb="tab-list"] {
+        background: #161B26 !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 16px !important;
+        padding: 8px !important;
+        gap: 10px !important;
+        margin-top: 6px !important;
+        margin-bottom: 24px !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+        display: flex !important;
+        width: 100% !important;
+        flex-wrap: wrap !important;
+    }
+
+    /* Hilangkan garis border/underline default Streamlit */
+    div[data-baseweb="tab-border"],
+    div[data-baseweb="tab-highlight"] {
+        display: none !important;
+    }
+
+    /* Setiap Tombol Tab di dalam Card jadi Kartu Navigasi yang Besar & Mewah */
+    button[data-baseweb="tab"] {
+        flex: 1 1 200px !important;
+        background: rgba(255, 255, 255, 0.035) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 12px !important;
+        padding: 14px 20px !important;
+        color: #94A3B8 !important;
+        font-size: 0.98rem !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.2px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+        transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        cursor: pointer !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08) !important;
+        white-space: nowrap !important;
+        min-height: 52px !important;
+    }
+
+    /* Hover Tab Card */
+    button[data-baseweb="tab"]:hover {
+        background: rgba(37, 99, 235, 0.18) !important;
+        border-color: rgba(37, 99, 235, 0.45) !important;
+        color: #FFFFFF !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.25) !important;
+    }
+
+    /* Active Tab Card: Gradien Biru Mewah dengan Glow */
+    button[data-baseweb="tab"][aria-selected="true"] {
+        background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%) !important;
+        border: 1.5px solid #60A5FA !important;
+        color: #FFFFFF !important;
+        font-weight: 800 !important;
+        box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    button[data-baseweb="tab"] div,
+    button[data-baseweb="tab"] p,
+    button[data-baseweb="tab"] span {
+        font-size: 0.98rem !important;
+        font-weight: 700 !important;
+        color: inherit !important;
+    }
+
     /* Hero Header */
     .hero-container {
         background: linear-gradient(135deg, #091e42 0%, #172554 45%, #1d4ed8 100%);
@@ -68,8 +155,8 @@ st.markdown("""
         border-radius: 16px;
         color: white;
         margin-bottom: 18px;
-        box-shadow: 0 10px 25px -5px rgba(29, 78, 216, 0.28);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 10px 25px -5px rgba(29, 78, 216, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.15);
     }
     .hero-title {
         font-size: 1.7rem;
@@ -112,13 +199,13 @@ st.markdown("""
         display: flex;
         align-items: center;
         justify-content: space-between;
-        background: var(--secondary-background-color);
-        border: 1px solid rgba(128, 128, 128, 0.18);
+        background: #161B26;
+        border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 14px;
         padding: 12px 18px;
         margin-bottom: 20px;
         gap: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
     }
     .step-card {
         display: flex;
@@ -130,11 +217,12 @@ st.markdown("""
         transition: all 0.2s ease;
     }
     .step-card.active {
-        background: rgba(37, 99, 235, 0.12);
+        background: rgba(37, 99, 235, 0.15);
         border: 1.5px solid #2563eb;
+        box-shadow: 0 0 12px rgba(37, 99, 235, 0.2);
     }
     .step-card.completed {
-        background: rgba(16, 185, 129, 0.12);
+        background: rgba(16, 185, 129, 0.15);
         border: 1.5px solid #10b981;
     }
     .step-card.idle {
@@ -174,41 +262,77 @@ st.markdown("""
         font-weight: 700;
         letter-spacing: 0.5px;
         text-transform: uppercase;
-        color: #64748b;
+        color: #94A3B8;
     }
     .step-title {
         font-size: 0.88rem;
         font-weight: 700;
         line-height: 1.2;
+        color: #F3F4F6;
     }
     .step-arrow {
-        color: #94a3b8;
+        color: #64748B;
         font-weight: bold;
         font-size: 1.1rem;
         user-select: none;
     }
 
+    /* Radio Selector Metode Pindai jadi Kartu-Kartu Modern */
+    div[data-testid="stRadio"] > div[role="radiogroup"] {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+        margin-top: 10px !important;
+        margin-bottom: 16px !important;
+    }
+
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label {
+        background: #161B26 !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 12px !important;
+        padding: 12px 14px !important;
+        margin: 0 !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
+        border-color: rgba(37, 99, 235, 0.4) !important;
+        background: rgba(37, 99, 235, 0.1) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label[data-checked="true"],
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
+        border: 1.5px solid #2563EB !important;
+        background: rgba(37, 99, 235, 0.18) !important;
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25) !important;
+    }
+
     /* Metric Cards */
     div[data-testid="stMetric"] {
-        background-color: var(--secondary-background-color);
-        padding: 14px 18px;
-        border-radius: 12px;
-        border: 1px solid rgba(128, 128, 128, 0.15);
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
-        transition: transform 0.2s ease;
+        background-color: #161B26 !important;
+        padding: 14px 18px !important;
+        border-radius: 14px !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2) !important;
+        transition: transform 0.2s ease, box-shadow 0.2s ease !important;
     }
     div[data-testid="stMetric"]:hover {
-        transform: translateY(-2px);
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.15) !important;
+        border-color: rgba(37, 99, 235, 0.35) !important;
     }
 
     /* Ticket Card Luxury Modern */
     .ticket-card {
-        background: var(--secondary-background-color);
+        background: #161B26;
         border: 2px solid #2563eb;
         border-radius: 16px;
         padding: 22px;
         margin-bottom: 16px;
-        box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.15);
+        box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.25);
         position: relative;
         overflow: hidden;
     }
@@ -222,31 +346,33 @@ st.markdown("""
         background: linear-gradient(90deg, #2563eb, #38bdf8, #10b981);
     }
     .ticket-card-invalid {
-        background: var(--secondary-background-color);
+        background: #161B26;
         border: 2px solid #ef4444;
         border-radius: 16px;
         padding: 26px 20px;
         text-align: center;
         margin-bottom: 16px;
-        box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.15);
+        box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.2);
     }
     .empty-state-card {
-        background: var(--secondary-background-color);
-        border: 2px dashed rgba(128, 128, 128, 0.3);
+        background: #161B26;
+        border: 2px dashed rgba(255, 255, 255, 0.12);
         border-radius: 16px;
         padding: 36px 20px;
         text-align: center;
         margin-bottom: 16px;
+        color: #E2E8F0;
     }
     .empty-title {
         font-size: 1.15rem;
         font-weight: 700;
         margin-top: 8px;
         margin-bottom: 4px;
+        color: #FFFFFF;
     }
     .empty-sub {
         font-size: 0.88rem;
-        color: #64748b;
+        color: #94A3B8;
         max-width: 440px;
         margin: 0 auto 16px auto;
         line-height: 1.5;
@@ -258,11 +384,12 @@ st.markdown("""
         flex-wrap: wrap;
     }
     .pill-mini {
-        background: rgba(128, 128, 128, 0.12);
+        background: rgba(255, 255, 255, 0.08);
         padding: 4px 10px;
         border-radius: 9999px;
         font-size: 0.75rem;
         font-weight: 600;
+        color: #E2E8F0;
     }
 
     /* Authentic Indonesian License Plate */
@@ -270,7 +397,7 @@ st.markdown("""
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+        background: linear-gradient(180deg, #111827 0%, #030712 100%);
         color: #ffffff !important;
         font-family: 'Courier New', 'Consolas', monospace;
         font-size: 2.1rem;
@@ -279,7 +406,7 @@ st.markdown("""
         padding: 10px 24px;
         border-radius: 10px;
         border: 3px solid #334155;
-        box-shadow: inset 0 2px 4px rgba(255,255,255,0.15), 0 6px 16px rgba(0,0,0,0.35);
+        box-shadow: inset 0 2px 4px rgba(255,255,255,0.15), 0 6px 16px rgba(0,0,0,0.45);
         text-shadow: 0 2px 4px rgba(0,0,0,0.7);
         margin: 8px 0 12px 0;
     }
@@ -293,18 +420,85 @@ st.markdown("""
         font-size: 0.88rem;
         letter-spacing: 0.2px;
     }
-    .status-dosen { background: #dcfce7; color: #15803d; border: 1.5px solid #86efac; }
-    .status-mhs { background: #e0f2fe; color: #0369a1; border: 1.5px solid #7dd3fc; }
-    .status-tamu { background: #fef3c7; color: #b45309; border: 1.5px solid #fde68a; }
-    .status-invalid { background: #fee2e2; color: #b91c1c; border: 1.5px solid #fca5a5; }
-    .status-uncertain { background: #fef9c3; color: #a16207; border: 1.5px solid #fde047; }
+    .status-dosen { background: rgba(16, 185, 129, 0.2); color: #4ADE80; border: 1.5px solid rgba(74, 222, 128, 0.4); }
+    .status-mhs { background: rgba(37, 99, 235, 0.2); color: #93C5FD; border: 1.5px solid rgba(147, 197, 253, 0.4); }
+    .status-tamu { background: rgba(245, 158, 11, 0.2); color: #FCD34D; border: 1.5px solid rgba(252, 211, 77, 0.4); }
+    .status-invalid { background: rgba(239, 68, 68, 0.2); color: #FCA5A5; border: 1.5px solid rgba(252, 165, 165, 0.4); }
+    .status-uncertain { background: rgba(234, 179, 8, 0.2); color: #FDE047; border: 1.5px solid rgba(253, 224, 71, 0.4); }
 
     /* Action Buttons */
     div.stButton > button {
-        border-radius: 10px;
-        font-weight: 700;
-        padding: 10px 18px;
-        transition: all 0.2s ease;
+        border-radius: 12px !important;
+        font-weight: 700 !important;
+        padding: 12px 20px !important;
+        transition: all 0.2s ease !important;
+    }
+
+    div.stButton > button[kind="primary"],
+    div.stButton > button[data-testid="baseButton-primary"] {
+        background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%) !important;
+        border: 1px solid #3B82F6 !important;
+        color: white !important;
+        font-weight: 800 !important;
+        box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35) !important;
+    }
+
+    div.stButton > button[kind="primary"]:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 25px rgba(37, 99, 235, 0.5) !important;
+        border-color: #60A5FA !important;
+    }
+
+    div.stButton > button[kind="secondary"],
+    div.stButton > button[data-testid="baseButton-secondary"] {
+        background: #1E293B !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        color: #E2E8F0 !important;
+    }
+
+    div.stButton > button[kind="secondary"]:hover {
+        background: #334155 !important;
+        border-color: rgba(255,255,255,0.25) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    /* Forms and Tables */
+    div[data-testid="stForm"] {
+        background: #161B26 !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 16px !important;
+        padding: 22px !important;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.2) !important;
+    }
+
+    div[data-testid="stDataFrame"] {
+        border-radius: 14px !important;
+        overflow: hidden !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.2) !important;
+    }
+
+    /* Sidebar Styling */
+    section[data-testid="stSidebar"] {
+        background-color: #11151F !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        div[data-baseweb="tab-list"] {
+            flex-direction: column !important;
+        }
+        button[data-baseweb="tab"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+        div[data-testid="stRadio"] > div[role="radiogroup"] {
+            grid-template-columns: 1fr !important;
+        }
+        .hero-title {
+            font-size: 1.35rem;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
