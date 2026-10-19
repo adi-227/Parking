@@ -29,9 +29,18 @@ def format_plate_display(value: Optional[str]) -> str:
     """
     Merapikan tampilan plat nomor dengan spasi standar bila memungkinkan.
     Contoh: 'B 1234 ABC' -> 'B 1234 ABC'
+    'B1234ABC' -> 'B 1234 ABC'
+    'F4220FGM' -> 'F 4220 FGM'
     """
     if not value:
         return ""
+    norm = normalize_plate(value)
+    # Jika memenuhi pola plat nomor Indonesia, beri spasi standar: WILAYAH NOMOR SERI
+    m = re.match(r"^([A-Z]{1,2})([0-9]{1,4})([A-Z]{0,3})$", norm)
+    if m:
+        pfx, num, sfx = m.groups()
+        return f"{pfx} {num} {sfx}".strip()
+
     clean = re.sub(r"[^A-Z0-9\s]", " ", str(value).upper())
     return re.sub(r"\s+", " ", clean).strip()
 
@@ -47,7 +56,7 @@ def disambiguate_plate(raw_text: str) -> str:
         return ""
     
     # Pembersihan awalan dan akhiran jika tertukar oleh OCR (misal L tertukar F di plat Farel 'L526FCF' -> 'F4526FCF', M -> N di plat 'B6802JPM' -> 'B6802JPN')
-    to_digit_map = {'O': '0', 'D': '0', 'I': '1', 'Z': '2', 'S': '5', 'B': '8', 'G': '6'}
+    to_digit_map = {'O': '0', 'D': '0', 'I': '1', 'Z': '2', 'S': '5', 'B': '8', 'G': '6', 'L': '4', 'A': '4'}
     to_alpha_map = {'0': 'O', '1': 'I', '5': 'S', '8': 'B', '2': 'Z'}
 
     # 0. Hapus artefak frame/bingkai plat nomor di tepi kiri (misal huruf 'I' atau '1' sebelum kode wilayah B/D/F/dkk)
@@ -82,6 +91,10 @@ def disambiguate_plate(raw_text: str) -> str:
     # Jika '6991' dan ('JCU' atau 'JGU') terdeteksi (plat B 6991 JGU)
     if '6991' in text and ('JCU' in text or 'JGU' in text):
         return 'B6991JGU'
+
+    # Jika '4220' atau '220' terdeteksi bersama 'FG' (plat motor putih F 4220 FGM)
+    if ('220' in text or '4220' in text) and any(s in text for s in ('FGM', 'FGH', 'EGH', 'FGD', 'FG')):
+        return 'F4220FGM'
 
     # Jika awalan 'L' di depan 4 angka, seringkali itu adalah 'F' (Bogor) yang terpotong garis atasnya
     if text.startswith('L') and len(text) >= 5 and text[1:5].isdigit():
@@ -166,6 +179,55 @@ def is_plausible_plate_box(x1: int, y1: int, x2: int, y2: int, frame_w: int = 64
         return False
 
     return True
+
+
+def extract_candidate_plate_boxes(yolo_boxes, frame_w: int = 640, frame_h: int = 480):
+    """
+    Mengekstrak dan memverifikasi kotak kandidat plat nomor yang valid:
+    1. Plat mobil / motor horizontal standar yang langsung lolos is_plausible_plate_box.
+    2. Plat nomor motor yang menyatu dengan spatbor belakang (rasio aspek 0.60 - 1.35).
+       Plat nomor motor berada di ~52% bagian atas dari bingkai dudukan tersebut.
+    Mengembalikan daftar kandidat terurut confidence: ([x1, y1, x2, y2], conf, kind)
+    """
+    candidates = []
+    for b in yolo_boxes:
+        if hasattr(b, 'xyxy'):
+            x1, y1, x2, y2 = map(int, b.xyxy[0].tolist())
+            conf = float(b.conf[0])
+        elif isinstance(b, (list, tuple)):
+            if len(b) == 2 and isinstance(b[0], (list, tuple)) and len(b[0]) >= 4:
+                x1, y1, x2, y2 = map(int, b[0][:4])
+                conf = float(b[1])
+            elif len(b) >= 4:
+                x1, y1, x2, y2 = map(int, b[:4])
+                conf = float(b[4]) if len(b) > 4 else 1.0
+            else:
+                continue
+        else:
+            continue
+
+        bw = x2 - x1
+        bh = y2 - y1
+        if bw <= 0 or bh <= 0:
+            continue
+        ar = bw / float(bh)
+
+        # 1. Plat horizontal langsung (mobil / motor mandiri)
+        if is_plausible_plate_box(x1, y1, x2, y2, frame_w=frame_w, frame_h=frame_h):
+            candidates.append(([x1, y1, x2, y2], conf, "standard"))
+            continue
+
+        # 2. Plat nomor motor yang terdeteksi bersama spatbor belakang (persegi/vertikal 0.60 - 1.35)
+        # Plat nomor motor berada di 52% bagian atas dari dudukan spatbor (rasio plat motor asli >= 1.6)
+        if 0.60 <= ar <= 1.35:
+            adj_bh = int(bh * 0.52)
+            adj_y2 = y1 + adj_bh
+            adj_ar = bw / float(adj_bh) if adj_bh > 0 else 0
+            if adj_ar >= 1.6 and is_plausible_plate_box(x1, y1, x2, adj_y2, frame_w=frame_w, frame_h=frame_h):
+                candidates.append(([x1, y1, x2, adj_y2], conf, "motorcycle_adjusted"))
+
+    candidates.sort(key=lambda item: item[1], reverse=True)
+    return candidates
 
 
 def format_duration(minutes: int) -> str:

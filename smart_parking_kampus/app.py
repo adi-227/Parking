@@ -22,36 +22,10 @@ from parking_logic import (
     rupiah,
     TARIFFS,
     CATEGORIES,
+    is_valid_plate_pattern,
+    is_plausible_plate_box,
+    extract_candidate_plate_boxes,
 )
-
-try:
-    from parking_logic import is_valid_plate_pattern, is_plausible_plate_box
-except (ImportError, AttributeError):
-    def is_valid_plate_pattern(value):
-        if not value:
-            return False
-        norm = normalize_plate(value)
-        if len(norm) < 3 or len(norm) > 10:
-            return False
-        has_digit = any(c.isdigit() for c in norm)
-        has_alpha = any(c.isalpha() for c in norm)
-        return has_digit and has_alpha and bool(re.match(r"^[A-Z]{1,2}[0-9]{1,4}[A-Z]{0,3}$", norm))
-
-    def is_plausible_plate_box(x1, y1, x2, y2, frame_w=640, frame_h=480):
-        bw = x2 - x1
-        bh = y2 - y1
-        if bh <= 0 or bw <= 0:
-            return False
-        aspect_ratio = bw / bh
-        if aspect_ratio < 1.35 or aspect_ratio > 5.8:
-            return False
-        if bw < 40 or bh < 15:
-            return False
-        if frame_h > 0 and bh > (frame_h * 0.45):
-            return False
-        if frame_w > 0 and bw > (frame_w * 0.95):
-            return False
-        return True
 import db_manager
 from dataset_validator import validate_dataset
 
@@ -394,9 +368,9 @@ with st.sidebar:
         model_path_input = st.text_input("Path Model YOLO", value=DEFAULT_MODEL_PATH)
         is_model_available = os.path.isfile(model_path_input)
         
-        conf_threshold = st.slider("Confidence YOLO", 0.10, 0.90, 0.35, 0.05)
-        ocr_min_conf = st.slider("Confidence Min OCR", 0.20, 0.80, 0.40, 0.05)
-        frame_skip = st.slider("Frekuensi Frame (Webcam)", 2, 16, 6, 2)
+        conf_threshold = st.slider("Confidence YOLO", 0.10, 0.90, 0.30, 0.05)
+        ocr_min_conf = st.slider("Confidence Min OCR", 0.15, 0.80, 0.25, 0.05)
+        frame_skip = st.slider("Frekuensi Frame (Webcam)", 2, 16, 3, 1)
         cooldown_sec = st.number_input("Cooldown Duplikasi (detik)", 10, 600, 60, 10)
 
 # ==============================================================================
@@ -533,21 +507,20 @@ with tab_gate:
                     with st.spinner("AI sedang membaca plat nomor dari foto..."):
                         from ocr_engine import extract_plate_text
                         model, reader = get_yolo_and_ocr(DEFAULT_MODEL_PATH)
-                        preds = model.predict(source=img_cv, conf=conf_threshold, verbose=False, imgsz=640)
-                        found = []
+                        eff_conf = min(conf_threshold, 0.25)
+                        preds = model.predict(source=img_cv, conf=eff_conf, verbose=False, imgsz=640)
                         ih, iw = img_cv.shape[:2]
-                        for p in preds:
-                            for b in p.boxes:
-                                x1, y1, x2, y2 = map(int, b.xyxy[0].tolist())
-                                if not is_plausible_plate_box(x1, y1, x2, y2, frame_w=iw, frame_h=ih):
-                                    continue
-                                crop = img_cv[max(0, y1):min(img_cv.shape[0], y2), max(0, x1):min(img_cv.shape[1], x2)]
-                                if crop.size > 0:
-                                    t, c, _ = extract_plate_text(reader, crop)
-                                    if t:
-                                        cleaned = disambiguate_plate(t)
-                                        if is_valid_plate_pattern(cleaned):
-                                            found.append((cleaned, c))
+                        candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=iw, frame_h=ih)
+                        found = []
+                        for box, box_conf, kind in candidates:
+                            x1, y1, x2, y2 = box
+                            crop = img_cv[max(0, y1):min(ih, y2), max(0, x1):min(iw, x2)]
+                            if crop.size > 0:
+                                t, c, _ = extract_plate_text(reader, crop)
+                                if t:
+                                    cleaned = disambiguate_plate(t)
+                                    if is_valid_plate_pattern(cleaned):
+                                        found.append((cleaned, c))
 
                         if found:
                             best_t, best_c = max(found, key=lambda x: x[1])
@@ -578,19 +551,18 @@ with tab_gate:
                         ih, iw = img_cv.shape[:2]
                         if is_model_available:
                             model, reader = get_yolo_and_ocr(DEFAULT_MODEL_PATH)
-                            preds = model.predict(source=img_cv, conf=conf_threshold, verbose=False, imgsz=640)
-                            for p in preds:
-                                for b in p.boxes:
-                                    x1, y1, x2, y2 = map(int, b.xyxy[0].tolist())
-                                    if not is_plausible_plate_box(x1, y1, x2, y2, frame_w=iw, frame_h=ih):
-                                        continue
-                                    crop = img_cv[max(0, y1):min(img_cv.shape[0], y2), max(0, x1):min(img_cv.shape[1], x2)]
-                                    if crop.size > 0:
-                                        t, c, _ = extract_plate_text(reader, crop)
-                                        if t:
-                                            cleaned = disambiguate_plate(t)
-                                            if is_valid_plate_pattern(cleaned):
-                                                found.append((cleaned, c))
+                            eff_conf = min(conf_threshold, 0.25)
+                            preds = model.predict(source=img_cv, conf=eff_conf, verbose=False, imgsz=640)
+                            candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=iw, frame_h=ih)
+                            for box, box_conf, kind in candidates:
+                                x1, y1, x2, y2 = box
+                                crop = img_cv[max(0, y1):min(ih, y2), max(0, x1):min(iw, x2)]
+                                if crop.size > 0:
+                                    t, c, _ = extract_plate_text(reader, crop)
+                                    if t:
+                                        cleaned = disambiguate_plate(t)
+                                        if is_valid_plate_pattern(cleaned):
+                                            found.append((cleaned, c))
 
                         if found:
                             best_t, best_c = max(found, key=lambda x: x[1])
@@ -643,22 +615,16 @@ with tab_gate:
                         with self.lock:
                             self.latest_frame = img.copy()
 
-                        # Deteksi kotak plat dengan YOLO tiap N frame
-                        if self.frame_count % frame_skip == 0:
+                        # Deteksi kotak plat dengan YOLO tiap 3 frame (responsif & mulus)
+                        step = max(2, min(frame_skip, 4))
+                        if self.frame_count % step == 0:
                             found_box = None
                             try:
-                                # Hindari deteksi palsu dengan conf minimal 0.35
-                                effective_conf = max(conf_threshold, 0.35)
-                                preds = model.predict(source=img, conf=effective_conf, verbose=False, imgsz=320)
-                                for p in preds:
-                                    for b in p.boxes:
-                                        bx1, by1, bx2, by2 = map(int, b.xyxy[0].tolist())
-                                        # HANYA terima kotak jika berbentuk plat nomor kendaraan (horizontal, proporsional)
-                                        if is_plausible_plate_box(bx1, by1, bx2, by2, frame_w=w, frame_h=h):
-                                            found_box = [bx1, by1, bx2, by2]
-                                            break
-                                    if found_box:
-                                        break
+                                preds = model.predict(source=img, conf=0.25, verbose=False, imgsz=480)
+                                if preds and len(preds[0].boxes) > 0:
+                                    cands = extract_candidate_plate_boxes(preds[0].boxes, frame_w=w, frame_h=h)
+                                    if cands:
+                                        found_box = cands[0][0]
                             except Exception:
                                 pass
                             with self.lock:
@@ -669,16 +635,43 @@ with tab_gate:
 
                         if cur_box:
                             x1, y1, x2, y2 = cur_box
-                            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 230, 0), 2)
-                            cv2.putText(img, "PLAT TERLIHAT (KLIK SCAN)", (x1, max(25, y1 - 10)),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 230, 0), 2)
+                            x1, y1 = max(0, x1), max(0, y1)
+                            x2, y2 = min(w, x2), min(h, y2)
+                            # Kotak hijau neon dinamis yang presisi mengikuti plat nomor bergerak
+                            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 240, 0), 3)
+
+                            # Badge status "PLAT TERDETEKSI" di atas kotak
+                            badge_text = "PLAT TERDETEKSI (KLIK SCAN)"
+                            t_size = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)[0]
+                            bg_y1 = max(0, y1 - 28)
+                            bg_y2 = y1
+                            cv2.rectangle(img, (x1, bg_y1), (min(w, x1 + t_size[0] + 16), bg_y2), (0, 200, 0), -1)
+                            cv2.putText(img, badge_text, (x1 + 8, bg_y1 + 20),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 2)
                         else:
+                            # Bila plat belum terarah: Sudut bidik kamera tipis (viewfinder brackets)
                             cx, cy = w // 2, h // 2
-                            bx1, by1 = cx - 160, cy - 50
-                            bx2, by2 = cx + 160, cy + 50
-                            cv2.rectangle(img, (bx1, by1), (bx2, by2), (0, 180, 255), 1, cv2.LINE_AA)
-                            cv2.putText(img, "Arahkan Plat ke Sini", (bx1 + 10, by1 - 8),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 180, 255), 1)
+                            vw = min(int(w * 0.85), 340)
+                            vh = min(int(h * 0.35), 140)
+                            vx1, vy1 = cx - vw // 2, cy - vh // 2
+                            vx2, vy2 = cx + vw // 2, cy + vh // 2
+                            c_len = 22
+                            c_color = (220, 220, 220)
+
+                            # 4 sudut bidik tipis
+                            cv2.line(img, (vx1, vy1), (vx1 + c_len, vy1), c_color, 2)
+                            cv2.line(img, (vx1, vy1), (vx1, vy1 + c_len), c_color, 2)
+                            cv2.line(img, (vx2, vy1), (vx2 - c_len, vy1), c_color, 2)
+                            cv2.line(img, (vx2, vy1), (vx2, vy1 + c_len), c_color, 2)
+                            cv2.line(img, (vx1, vy2), (vx1 + c_len, vy2), c_color, 2)
+                            cv2.line(img, (vx1, vy2), (vx1, vy2 - c_len), c_color, 2)
+                            cv2.line(img, (vx2, vy2), (vx2 - c_len, vy2), c_color, 2)
+                            cv2.line(img, (vx2, vy2), (vx2, vy2 - c_len), c_color, 2)
+
+                            guide_lbl = "Arahkan kamera ke plat kendaraan"
+                            g_size = cv2.getTextSize(guide_lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)[0]
+                            cv2.putText(img, guide_lbl, (cx - g_size[0] // 2, max(22, vy1 - 10)),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, c_color, 1, cv2.LINE_AA)
 
                         return type(frame).from_ndarray(img, format="bgr24")
 
@@ -701,20 +694,19 @@ with tab_gate:
                     if snap is not None:
                         with st.spinner("AI sedang memeriksa plat nomor kendaraan..."):
                             sh, sw = snap.shape[:2]
-                            preds = model.predict(source=snap, conf=conf_threshold, verbose=False, imgsz=640)
+                            eff_conf = min(conf_threshold, 0.25)
+                            preds = model.predict(source=snap, conf=eff_conf, verbose=False, imgsz=640)
+                            candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=sw, frame_h=sh)
                             found = []
-                            for p in preds:
-                                for b in p.boxes:
-                                    x1, y1, x2, y2 = map(int, b.xyxy[0].tolist())
-                                    if not is_plausible_plate_box(x1, y1, x2, y2, frame_w=sw, frame_h=sh):
-                                        continue
-                                    crop = snap[max(0, y1):min(snap.shape[0], y2), max(0, x1):min(snap.shape[1], x2)]
-                                    if crop.size > 0:
-                                        t, c, _ = extract_plate_text(reader, crop)
-                                        if t:
-                                            cleaned = disambiguate_plate(t)
-                                            if is_valid_plate_pattern(cleaned):
-                                                found.append((cleaned, c))
+                            for box, box_conf, kind in candidates:
+                                x1, y1, x2, y2 = box
+                                crop = snap[max(0, y1):min(sh, y2), max(0, x1):min(sw, x2)]
+                                if crop.size > 0:
+                                    t, c, _ = extract_plate_text(reader, crop)
+                                    if t:
+                                        cleaned = disambiguate_plate(t)
+                                        if is_valid_plate_pattern(cleaned):
+                                            found.append((cleaned, c))
 
                             if found:
                                 best_t, best_c = max(found, key=lambda x: x[1])

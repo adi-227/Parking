@@ -9,6 +9,7 @@ from parking_logic import (
     disambiguate_plate,
     is_valid_plate_pattern,
     is_plausible_plate_box,
+    extract_candidate_plate_boxes,
     format_duration,
     decide,
     rupiah,
@@ -33,6 +34,9 @@ class TestParkingLogic(unittest.TestCase):
     def test_format_plate_display(self):
         self.assertEqual(format_plate_display("b  1234  xyz"), "B 1234 XYZ")
         self.assertEqual(format_plate_display("B-1234-XYZ"), "B 1234 XYZ")
+        self.assertEqual(format_plate_display("F4220FGM"), "F 4220 FGM")
+        self.assertEqual(format_plate_display("B6802JPN"), "B 6802 JPN")
+        self.assertEqual(format_plate_display("F4526FCF"), "F 4526 FCF")
 
     def test_disambiguate_plate(self):
         # O in middle number converted to 0, I converted to 1
@@ -42,6 +46,11 @@ class TestParkingLogic(unittest.TestCase):
         self.assertEqual(disambiguate_plate("IB 6991 JGU"), "B6991JGU")
         self.assertEqual(disambiguate_plate("IB 6991 JCUL"), "B6991JGU")
         self.assertEqual(disambiguate_plate("B 6991 JGU"), "B6991JGU")
+        # Motorcycle plate F 4220 FGM and its common OCR misreadings
+        self.assertEqual(disambiguate_plate("F 4220 FGM"), "F4220FGM")
+        self.assertEqual(disambiguate_plate("FL220 FGH"), "F4220FGM")
+        self.assertEqual(disambiguate_plate("EL220 FGD"), "F4220FGM")
+        self.assertEqual(disambiguate_plate("L220EGH"), "F4220FGM")
 
     def test_tariffs(self):
         self.assertEqual(TARIFFS["Dosen"], 0)
@@ -115,6 +124,29 @@ class TestParkingLogic(unittest.TestCase):
         self.assertFalse(is_plausible_plate_box(50, 50, 500, 310, 640, 480))
         # 6. Kotak noise terlalu kecil
         self.assertFalse(is_plausible_plate_box(10, 10, 25, 20, 640, 480))
+
+    def test_extract_candidate_plate_boxes(self):
+        # 1. Kotak plat mobil standar
+        std_boxes = [([50, 150, 350, 245], 0.92)]
+        cands = extract_candidate_plate_boxes(std_boxes, frame_w=640, frame_h=480)
+        self.assertEqual(len(cands), 1)
+        self.assertEqual(cands[0][2], "standard")
+        self.assertEqual(cands[0][0], [50, 150, 350, 245])
+
+        # 2. Kotak plat motor menyatu dengan spatbor belakang (w=320, h=345, ar=0.93)
+        motor_boxes = [([60, 152, 380, 497], 0.88)]
+        cands_m = extract_candidate_plate_boxes(motor_boxes, frame_w=640, frame_h=480)
+        self.assertEqual(len(cands_m), 1)
+        self.assertEqual(cands_m[0][2], "motorcycle_adjusted")
+        # Tinggi kotak disesuaikan ke ~52% bagian atas
+        self.assertTrue(cands_m[0][0][3] < 497)
+        self.assertTrue(cands_m[0][0][3] > 152)
+
+        # 3. Noise / telapak tangan ditolak
+        palm_boxes = [([160, 150, 345, 403], 0.70)]
+        cands_p = extract_candidate_plate_boxes(palm_boxes, frame_w=640, frame_h=480)
+        # Bounding box telapak tangan setelah disesuaikan tetap bukan proporsi plat kendaraan
+        self.assertEqual(len(cands_p), 0)
 
     def test_format_duration(self):
         self.assertEqual(format_duration(0), "Kurang dari 1 menit")
