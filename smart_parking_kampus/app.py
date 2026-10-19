@@ -11,6 +11,7 @@ from parking_logic import (
     normalize_plate,
     format_plate_display,
     disambiguate_plate,
+    is_valid_plate_pattern,
     format_duration,
     decide,
     rupiah,
@@ -127,6 +128,8 @@ st.markdown("""
     .status-dosen { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
     .status-mhs { background: #e0f2fe; color: #075985; border: 1px solid #7dd3fc; }
     .status-tamu { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .status-invalid { background: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
+    .status-uncertain { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
 
     /* Clean Buttons */
     div.stButton > button {
@@ -276,12 +279,10 @@ with tab_gate:
                                     crop = img_cv[max(0, y1):min(img_cv.shape[0], y2), max(0, x1):min(img_cv.shape[1], x2)]
                                     if crop.size > 0:
                                         t, c, _ = extract_plate_text(reader, crop)
-                                        if t and normalize_plate(t):
-                                            found.append((t, c))
-                            if not found:
-                                t, c, _ = extract_plate_text(reader, img_cv)
-                                if t and normalize_plate(t):
-                                    found.append((t, c))
+                                        if t:
+                                            cleaned = disambiguate_plate(t)
+                                            if is_valid_plate_pattern(cleaned):
+                                                found.append((cleaned, c))
 
                             if found:
                                 best_t, best_c = max(found, key=lambda x: x[1])
@@ -291,7 +292,11 @@ with tab_gate:
                                 st.toast(f"Plat terdeteksi: {best_t}", icon="✅")
                                 st.rerun()
                             else:
-                                st.warning("Plat belum terbaca jelas. Pastikan plat berada di tengah dan pencahayaan cukup.")
+                                total_boxes = sum(len(p.boxes) for p in preds) if preds else 0
+                                if total_boxes == 0:
+                                    st.error("❌ Tidak ada plat nomor kendaraan yang terdeteksi. AI mendeteksi ini bukan kendaraan (wajah / pakaian / benda acak).")
+                                else:
+                                    st.warning("⚠️ Kotak plat terdeteksi namun karakter tidak terbaca sebagai format plat nomor Indonesia yang sah.")
 
                 # OPSI B: KAMERA STREAMING WEBRTC (OPTIMIZED 30 FPS)
                 else:
@@ -369,7 +374,7 @@ with tab_gate:
                             with ctx.video_processor.lock:
                                 snap = ctx.video_processor.latest_frame
                             if snap is not None:
-                                with st.spinner("AI sedang membaca plat dari kamera..."):
+                                with st.spinner("AI sedang memeriksa plat nomor kendaraan..."):
                                     from ocr_engine import extract_plate_text
                                     preds = model.predict(source=snap, conf=conf_threshold, verbose=False, imgsz=640)
                                     found = []
@@ -379,12 +384,10 @@ with tab_gate:
                                             crop = snap[max(0, y1):min(snap.shape[0], y2), max(0, x1):min(snap.shape[1], x2)]
                                             if crop.size > 0:
                                                 t, c, _ = extract_plate_text(reader, crop)
-                                                if t and normalize_plate(t):
-                                                    found.append((t, c))
-                                    if not found:
-                                        t, c, _ = extract_plate_text(reader, snap)
-                                        if t and normalize_plate(t):
-                                            found.append((t, c))
+                                                if t:
+                                                    cleaned = disambiguate_plate(t)
+                                                    if is_valid_plate_pattern(cleaned):
+                                                        found.append((cleaned, c))
 
                                     if found:
                                         best_t, best_c = max(found, key=lambda x: x[1])
@@ -394,7 +397,11 @@ with tab_gate:
                                         st.toast(f"Plat terdeteksi: {best_t}", icon="✅")
                                         st.rerun()
                                     else:
-                                        st.warning("Plat belum terbaca jelas. Dekatkan kamera atau atur pencahayaan.")
+                                        total_boxes = sum(len(p.boxes) for p in preds) if preds else 0
+                                        if total_boxes == 0:
+                                            st.error("❌ Tidak ada plat nomor kendaraan yang terdeteksi. AI mendeteksi ini bukan kendaraan (wajah / pakaian / benda acak).")
+                                        else:
+                                            st.warning("⚠️ Kotak terdeteksi namun karakter tidak terbaca sebagai format plat nomor Indonesia yang sah.")
                     except Exception as e:
                         st.error(f"Gagal mengaktifkan kamera streaming: {e}")
 
@@ -409,7 +416,7 @@ with tab_gate:
                 st.image(cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB), caption="Foto Kendaraan", use_container_width=True)
 
                 if st.button("🔍 Deteksi & Baca Plat Nomor", type="primary", use_container_width=True):
-                    with st.spinner("AI menganalisis gambar..."):
+                    with st.spinner("AI menganalisis gambar kendaraan..."):
                         from ocr_engine import extract_plate_text
                         found = []
                         if is_model_available:
@@ -421,13 +428,10 @@ with tab_gate:
                                     crop = img_cv[max(0, y1):min(img_cv.shape[0], y2), max(0, x1):min(img_cv.shape[1], x2)]
                                     if crop.size > 0:
                                         t, c, _ = extract_plate_text(reader, crop)
-                                        if t and normalize_plate(t):
-                                            found.append((t, c))
-                        if not found:
-                            reader = get_ocr_only()
-                            t, c, _ = extract_plate_text(reader, img_cv)
-                            if t and normalize_plate(t):
-                                found.append((t, c))
+                                        if t:
+                                            cleaned = disambiguate_plate(t)
+                                            if is_valid_plate_pattern(cleaned):
+                                                found.append((cleaned, c))
 
                         if found:
                             best_t, best_c = max(found, key=lambda x: x[1])
@@ -437,20 +441,23 @@ with tab_gate:
                             st.toast(f"Plat terdeteksi: {best_t}", icon="✅")
                             st.rerun()
                         else:
-                            st.error("Tidak dapat menemukan plat nomor pada foto ini. Pastikan plat tidak terpotong.")
+                            st.error("❌ Tidak dapat menemukan plat nomor kendaraan pada gambar ini. Pastikan foto memuat plat kendaraan bermotor (bukan wajah/benda acak).")
 
         # MODE 3: KETIK MANUAL
         else:
             st.write("Gunakan jika plat nomor kotor/rusak dan tidak terbaca oleh AI:")
             manual_in = st.text_input("Ketik Nomor Plat Kendaraan", placeholder="Contoh: B 6802 JPN / F 4526 FCF")
             if st.button("🔎 Periksa Nomor Plat", type="primary", use_container_width=True):
-                if manual_in.strip():
-                    st.session_state["current_plate"] = manual_in.strip()
+                cleaned_man = disambiguate_plate(manual_in.strip())
+                if not manual_in.strip():
+                    st.warning("Masukkan nomor plat terlebih dahulu.")
+                elif not is_valid_plate_pattern(cleaned_man):
+                    st.error("❌ Format plat tidak valid. Masukkan format plat Indonesia yang benar (Contoh: B 1234 XYZ, F 4526 FCF). Jangan masukkan kata acak atau nama.")
+                else:
+                    st.session_state["current_plate"] = cleaned_man
                     st.session_state["current_conf"] = 1.0
                     st.session_state["current_source"] = "Input Manual"
                     st.rerun()
-                else:
-                    st.warning("Masukkan nomor plat terlebih dahulu.")
 
     # PANEL KANAN: KARTU HASIL VERIFIKASI & KONFIRMASI PETUGAS
     with col_verify:
@@ -493,7 +500,13 @@ with tab_gate:
             )
 
             # Tentukan warna badge status
-            if dec_result["status_code"] == "REGISTERED":
+            if dec_result["status_code"] == "INVALID_PLATE":
+                badge_style = "status-invalid"
+                status_title = "❌ BUKAN PLAT KENDARAAN (OBJEK TIDAK VALID)"
+            elif dec_result["status_code"] == "OCR_UNCERTAIN":
+                badge_style = "status-uncertain"
+                status_title = "⚠️ TEKS BURAM / OCR KURANG YAKIN"
+            elif dec_result["status_code"] == "REGISTERED":
                 if dec_result["category"] == "Dosen":
                     badge_style = "status-dosen"
                     status_title = "DOSEN TERDAFTAR — PARKIR GRATIS"
@@ -535,7 +548,7 @@ with tab_gate:
                 f'</div>'
                 f'<hr style="margin: 16px 0; border: none; border-top: 1px solid rgba(128,128,128,0.2);" />'
                 f'<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 0.95rem;">'
-                f'<div>👤 <b>Nama Pemilik:</b><br><span style="font-size:1.1rem; font-weight:700;">{dec_result.get("owner_name") or "Tamu / Luar Kampus"}</span></div>'
+                f'<div>👤 <b>Nama Pemilik:</b><br><span style="font-size:1.1rem; font-weight:700;">{dec_result.get("owner_name") or "Tidak Valid"}</span></div>'
                 f'<div>🏷️ <b>Kategori:</b><br><span style="font-size:1.1rem; font-weight:700;">{dec_result.get("category")}</span></div>'
                 f'<div>💵 <b>Tarif Parkir:</b><br><span style="font-size:1.4rem; font-weight:800; color:#2563eb;">{rupiah(dec_result.get("fee"))}</span></div>'
                 f'<div>🚪 <b>Status Gerbang:</b><br><span style="font-size:1.05rem; font-weight:700;">{gate_status_label}</span></div>'
@@ -545,18 +558,24 @@ with tab_gate:
             )
             st.markdown(card_html, unsafe_allow_html=True)
 
-            # Cek Peringatan Duplikasi
-            recent = db_manager.check_recent_transaction(cleaned_plat, cooldown_seconds=cooldown_sec, gate_direction=gate_code)
-            if recent:
-                st.warning(f"⚠️ Peringatan: Kendaraan {format_plate_display(cleaned_plat)} sudah tercatat pada {recent['created_at']} (arah {gate_code}).")
+            if dec_result["status_code"] == "INVALID_PLATE":
+                st.error("🚫 **Objek Tidak Sah:** AI mendeteksi bahwa objek ini bukan plat nomor kendaraan bermotor yang sah (wajah, pakaian, atau teks acak). Gerbang tidak dapat dibuka.")
+                if st.button("🔄 Reset / Periksa Ulang", type="secondary", use_container_width=True):
+                    st.session_state["current_plate"] = None
+                    st.rerun()
+            else:
+                # Cek Peringatan Duplikasi
+                recent = db_manager.check_recent_transaction(cleaned_plat, cooldown_seconds=cooldown_sec, gate_direction=gate_code)
+                if recent:
+                    st.warning(f"⚠️ Peringatan: Kendaraan {format_plate_display(cleaned_plat)} sudah tercatat pada {recent['created_at']} (arah {gate_code}).")
 
-            # Form Konfirmasi Petugas
-            with st.form("form_konfirmasi_gerbang"):
-                koreksi_plat = st.text_input("Koreksi Plat Nomor (Jika Salah Baca)", value=format_plate_display(cleaned_plat))
-                catatan_petugas = st.text_input("Catatan Petugas (Opsional)", placeholder="Contoh: Mengantar dokumen ke Rektorat")
-                
-                btn_label = "🚪 Buka Gerbang Masuk (Simpan Transaksi)" if gate_code == "IN" else "🚪 Buka Gerbang Keluar & Selesai Parkir"
-                btn_simpan_tx = st.form_submit_button(btn_label, type="primary", use_container_width=True)
+                # Form Konfirmasi Petugas
+                with st.form("form_konfirmasi_gerbang"):
+                    koreksi_plat = st.text_input("Koreksi Plat Nomor (Jika Salah Baca)", value=format_plate_display(cleaned_plat))
+                    catatan_petugas = st.text_input("Catatan Petugas (Opsional)", placeholder="Contoh: Mengantar dokumen ke Rektorat")
+                    
+                    btn_label = "🚪 Buka Gerbang Masuk (Simpan Transaksi)" if gate_code == "IN" else "🚪 Buka Gerbang Keluar & Selesai Parkir"
+                    btn_simpan_tx = st.form_submit_button(btn_label, type="primary", use_container_width=True)
 
                 if btn_simpan_tx:
                     final_p = koreksi_plat.strip() if koreksi_plat.strip() else cleaned_plat

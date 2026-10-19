@@ -7,6 +7,7 @@ from parking_logic import (
     normalize_plate,
     format_plate_display,
     disambiguate_plate,
+    is_valid_plate_pattern,
     format_duration,
     decide,
     rupiah,
@@ -68,6 +69,33 @@ class TestParkingLogic(unittest.TestCase):
         res = decide("B 1234 XYZ", confidence=0.35, vehicle_data=veh, min_conf=0.40)
         self.assertEqual(res["status_code"], "OCR_UNCERTAIN")
         self.assertIn("OCR kurang yakin", res["decision"])
+
+    def test_is_valid_plate_pattern(self):
+        # Format plat nomor Indonesia valid
+        self.assertTrue(is_valid_plate_pattern("B 1234 XYZ"))
+        self.assertTrue(is_valid_plate_pattern("F 4526 FCF"))
+        self.assertTrue(is_valid_plate_pattern("B 6802 JPN"))
+        self.assertTrue(is_valid_plate_pattern("D 1 A"))
+        self.assertTrue(is_valid_plate_pattern("DK 9999 ZZ"))
+        self.assertTrue(is_valid_plate_pattern("B 123 QWE"))
+
+        # Benda acak, wajah, tulisan baju, angka/huruf tanpa kombinasi yang sah
+        self.assertFalse(is_valid_plate_pattern("NIKE"))
+        self.assertFalse(is_valid_plate_pattern("WAJAH"))
+        self.assertFalse(is_valid_plate_pattern("12345"))
+        self.assertFalse(is_valid_plate_pattern("ABC"))
+        self.assertFalse(is_valid_plate_pattern("MUKA SAYA"))
+        self.assertFalse(is_valid_plate_pattern(""))
+        self.assertFalse(is_valid_plate_pattern(None))
+
+    def test_decide_invalid_plate_format(self):
+        # Scan wajah/benda acak tidak boleh dianggap Tamu, harus INVALID_PLATE
+        res = decide("WAJAH", confidence=0.9, vehicle_data=None)
+        self.assertEqual(res["status_code"], "INVALID_PLATE")
+        self.assertIsNone(res["fee"])
+        self.assertFalse(res["is_registered"])
+        self.assertEqual(res["category"], "Bukan Plat Nomor")
+        self.assertIn("Bukan plat kendaraan", res["decision"])
 
     def test_format_duration(self):
         self.assertEqual(format_duration(0), "Kurang dari 1 menit")

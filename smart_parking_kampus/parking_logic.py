@@ -83,6 +83,31 @@ def disambiguate_plate(raw_text: str) -> str:
     return text
 
 
+def is_valid_plate_pattern(value: Optional[str]) -> bool:
+    """
+    Memeriksa apakah teks memenuhi pola plat nomor kendaraan Indonesia:
+    1-2 huruf wilayah (A-Z) + 1-4 digit nomor polisi (0-9) + 0-3 huruf seri (A-Z).
+    Contoh valid:
+      'B6802JPN', 'F4526FCF', 'B1234XYZ', 'D1', 'DK9999ZZ', 'B123QWE'
+    Contoh tidak valid (benda acak, wajah, tulisan baju):
+      'NIKE', 'WAJAH', 'ABC', '123456', 'XYZ', '', None
+    """
+    if not value:
+        return False
+    norm = normalize_plate(value)
+    if len(norm) < 3 or len(norm) > 10:
+        return False
+    # Harus ada kombinasi angka dan huruf
+    has_digit = any(c.isdigit() for c in norm)
+    has_alpha = any(c.isalpha() for c in norm)
+    if not (has_digit and has_alpha):
+        return False
+    
+    # Pola standar plat nomor kendaraan Indonesia
+    pattern = r"^[A-Z]{1,2}[0-9]{1,4}[A-Z]{0,3}$"
+    return bool(re.match(pattern, norm))
+
+
 def format_duration(minutes: int) -> str:
     """Format durasi menit ke dalam teks bahasa Indonesia yang ramah."""
     if minutes < 1:
@@ -108,14 +133,24 @@ def decide(
     norm = normalize_plate(plate)
     display_plate = format_plate_display(plate) if plate else "-"
 
-    if not norm or confidence < min_conf:
+    # 0. VALIDASI FORMAT PLAT & OCR CONFIDENCE
+    if not norm or not is_valid_plate_pattern(norm) or confidence < min_conf:
+        if norm and not is_valid_plate_pattern(norm):
+            reason = "Bukan plat kendaraan — objek/teks acak tidak sesuai format plat Indonesia"
+            status_code = "INVALID_PLATE"
+            category = "Bukan Plat Nomor"
+        else:
+            reason = "OCR kurang yakin — ambil ulang gambar / verifikasi petugas"
+            status_code = "OCR_UNCERTAIN"
+            category = None
+
         return {
             "plate": display_plate,
             "normalized_plate": norm,
-            "category": None,
+            "category": category,
             "fee": None,
-            "decision": "OCR kurang yakin — ambil ulang gambar / verifikasi petugas",
-            "status_code": "OCR_UNCERTAIN",
+            "decision": reason,
+            "status_code": status_code,
             "is_registered": False,
             "owner_name": None,
             "confidence": confidence,
