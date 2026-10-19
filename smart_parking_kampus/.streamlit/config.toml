@@ -1,7 +1,3 @@
-[theme]
-primaryColor = "#2563EB"
-font = "sans serif"
-
 [server]
 runOnSave = true
 headless = true

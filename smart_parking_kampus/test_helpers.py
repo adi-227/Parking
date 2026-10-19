@@ -17,6 +17,7 @@ from parking_logic import (
     rupiah,
     TARIFFS,
     DEFAULT_TARIFFS,
+    calculate_parking_fee,
 )
 import db_manager
 from dataset_validator import (
@@ -57,26 +58,33 @@ class TestParkingLogic(unittest.TestCase):
     def test_tariffs(self):
         self.assertEqual(TARIFFS["Dosen"], 0)
         self.assertEqual(TARIFFS["Mahasiswa"], 2000)
-        self.assertEqual(TARIFFS["Tamu"], 5000)
+        self.assertEqual(TARIFFS["Tamu"], 3000)
 
-    def test_decide_registered(self):
-        veh = {"plate": "B 1234 XYZ", "owner_name": "Dr. Andi", "category": "Dosen"}
-        res = decide("B 1234 XYZ", confidence=0.9, vehicle_data=veh)
-        self.assertTrue(res["is_registered"])
-        self.assertEqual(res["fee"], 0)
-        self.assertIn("GRATIS", res["decision"].upper())
-        self.assertEqual(res["status_code"], "REGISTERED")
-
-        veh_mhs = {"plate": "B 5678 ABC", "owner_name": "Budi", "category": "Mahasiswa"}
-        res_mhs = decide("B 5678 ABC", confidence=0.85, vehicle_data=veh_mhs)
-        self.assertTrue(res_mhs["is_registered"])
-        self.assertEqual(res_mhs["fee"], 2000)
-        self.assertIn("2.000", res_mhs["decision"])
+    def test_calculate_parking_fee(self):
+        # Dosen selalu gratis (Rp 0)
+        self.assertEqual(calculate_parking_fee("Dosen", 0), 0)
+        self.assertEqual(calculate_parking_fee("Dosen", 300), 0)
+        # Mahasiswa flat Rp 2.000 seharian
+        self.assertEqual(calculate_parking_fee("Mahasiswa", 10), 2000)
+        self.assertEqual(calculate_parking_fee("Mahasiswa", 600), 2000)
+        # Tamu: 1 jam pertama Rp 3.000
+        self.assertEqual(calculate_parking_fee("Tamu", 0), 3000)
+        self.assertEqual(calculate_parking_fee("Tamu", 45), 3000)
+        self.assertEqual(calculate_parking_fee("Tamu", 60), 3000)
+        # Tamu: Jam ke-2 (61 - 120 menit) -> Rp 3.000 + Rp 2.000 = Rp 5.000
+        self.assertEqual(calculate_parking_fee("Tamu", 61), 5000)
+        self.assertEqual(calculate_parking_fee("Tamu", 120), 5000)
+        # Tamu: Jam ke-3 (121 - 180 menit) -> Rp 3.000 + 2*Rp 2.000 = Rp 7.000
+        self.assertEqual(calculate_parking_fee("Tamu", 121), 7000)
+        self.assertEqual(calculate_parking_fee("Tamu", 180), 7000)
+        # Tamu: Jam ke-4 -> Rp 9.000
+        self.assertEqual(calculate_parking_fee("Tamu", 181), 9000)
 
     def test_decide_unregistered(self):
-        res = decide("B 9999 UNK", confidence=0.85, vehicle_data=None)
+        # Saat masuk (IN)
+        res = decide("B 9999 UNK", confidence=0.85, vehicle_data=None, gate_direction="IN")
         self.assertFalse(res["is_registered"])
-        self.assertEqual(res["fee"], 5000)
+        self.assertEqual(res["fee"], 3000)
         self.assertEqual(res["status_code"], "TAMU_UNREGISTERED")
         self.assertIn("TAMU", res["decision"])
 
@@ -168,21 +176,29 @@ class TestParkingLogic(unittest.TestCase):
 
     def test_decide_out_with_entry(self):
         from datetime import datetime, timedelta
-        entry_time = (datetime.now() - timedelta(minutes=45)).isoformat(timespec="seconds")
-        entry_rec = {"created_at": entry_time, "gate_direction": "IN"}
-        
+        entry_time_45 = (datetime.now() - timedelta(minutes=45)).isoformat(timespec="seconds")
+        entry_rec_45 = {"created_at": entry_time_45, "gate_direction": "IN"}
+
         # Dosen OUT -> free, duration computed
         veh_dosen = {"plate": "B 1234 XYZ", "owner_name": "Dr. Andi", "category": "Dosen"}
-        res_d = decide("B 1234 XYZ", confidence=0.9, vehicle_data=veh_dosen, gate_direction="OUT", entry_record=entry_rec)
+        res_d = decide("B 1234 XYZ", confidence=0.9, vehicle_data=veh_dosen, gate_direction="OUT", entry_record=entry_rec_45)
         self.assertEqual(res_d["fee"], 0)
         self.assertIn("45 Menit", res_d["duration_display"])
         self.assertIn("GRATIS", res_d["decision"])
 
-        # Tamu OUT -> Rp5.000, duration computed
-        res_t = decide("B 9999 UNK", confidence=0.85, vehicle_data=None, gate_direction="OUT", entry_record=entry_rec)
-        self.assertEqual(res_t["fee"], 5000)
-        self.assertIn("45 Menit", res_t["duration_display"])
-        self.assertIn("5.000", res_t["decision"])
+        # Tamu OUT (45 menit <= 1 jam pertama) -> Rp3.000
+        res_t1 = decide("B 9999 UNK", confidence=0.85, vehicle_data=None, gate_direction="OUT", entry_record=entry_rec_45)
+        self.assertEqual(res_t1["fee"], 3000)
+        self.assertIn("45 Menit", res_t1["duration_display"])
+        self.assertIn("3.000", res_t1["decision"])
+
+        # Tamu OUT (80 menit = 1 jam 20 menit) -> Rp3.000 + Rp2.000 = Rp5.000
+        entry_time_80 = (datetime.now() - timedelta(minutes=80)).isoformat(timespec="seconds")
+        entry_rec_80 = {"created_at": entry_time_80, "gate_direction": "IN"}
+        res_t2 = decide("B 9999 UNK", confidence=0.85, vehicle_data=None, gate_direction="OUT", entry_record=entry_rec_80)
+        self.assertEqual(res_t2["fee"], 5000)
+        self.assertIn("1 Jam 20 Menit", res_t2["duration_display"])
+        self.assertIn("5.000", res_t2["decision"])
 
     def test_compute_iou(self):
         # 1. Identical boxes

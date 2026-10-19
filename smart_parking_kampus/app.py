@@ -33,6 +33,7 @@ from parking_logic import (
     is_plausible_plate_box,
     extract_candidate_plate_boxes,
     SmoothBoxTracker,
+    calculate_parking_fee,
 )
 import db_manager
 from dataset_validator import validate_dataset
@@ -56,20 +57,90 @@ db_manager.init_db()
 # ==============================================================================
 # TEMA & GAYA VISUAL (ADAPTIVE LIGHT & DARK THEME — PREMIUM CAMPUS DASHBOARD)
 # ==============================================================================
-st.markdown("""
+if "app_theme" not in st.session_state:
+    st.session_state["app_theme"] = "Dark"
+
+is_dark = (st.session_state.get("app_theme", "Dark") == "Dark")
+
+if is_dark:
+    theme_vars = """
+        --bg-canvas: #0E1117;
+        --bg-card: #161B26;
+        --bg-sidebar: #11151F;
+        --border-color: rgba(255, 255, 255, 0.12);
+        --text-primary: #F3F4F6;
+        --text-secondary: #94A3B8;
+        --tab-list-bg: #161B26;
+        --tab-btn-bg: #0E1117;
+        --tab-btn-text: #F3F4F6;
+        --tab-btn-border: rgba(255, 255, 255, 0.14);
+        --input-bg: #161B26;
+        --input-text: #F3F4F6;
+        --input-border: rgba(255, 255, 255, 0.16);
+    """
+else:
+    theme_vars = """
+        --bg-canvas: #F8FAFC;
+        --bg-card: #FFFFFF;
+        --bg-sidebar: #F1F5F9;
+        --border-color: rgba(0, 0, 0, 0.12);
+        --text-primary: #0F172A;
+        --text-secondary: #64748B;
+        --tab-list-bg: #F1F5F9;
+        --tab-btn-bg: #FFFFFF;
+        --tab-btn-text: #1E293B;
+        --tab-btn-border: rgba(0, 0, 0, 0.15);
+        --input-bg: #FFFFFF;
+        --input-text: #0F172A;
+        --input-border: rgba(0, 0, 0, 0.16);
+    """
+
+st.markdown(f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
     
-    html, body, [class*="css"] {
+    html, body, [class*="css"] {{
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
+    }}
+
+    :root {{
+        {theme_vars}
+        --background-color: var(--bg-canvas);
+        --secondary-background-color: var(--bg-card);
+        --text-color: var(--text-primary);
+    }}
 
     /* Page Canvas: Menyesuaikan Otomatis Mode Light & Dark */
-    .stApp {
-        background-color: var(--background-color) !important;
-        color: var(--text-color) !important;
-    }
-    
+    .stApp {{
+        background-color: var(--bg-canvas) !important;
+        color: var(--text-primary) !important;
+    }}
+
+    /* Header Bar */
+    header[data-testid="stHeader"] {{
+        background-color: var(--bg-canvas) !important;
+    }}
+    header[data-testid="stHeader"] * {{
+        color: var(--text-primary) !important;
+    }}
+
+    /* Input & Select Controls */
+    div[data-baseweb="input"] > div,
+    input, textarea {{
+        background-color: var(--input-bg) !important;
+        color: var(--input-text) !important;
+        border-color: var(--input-border) !important;
+    }}
+    div[data-baseweb="select"] > div {{
+        background-color: var(--input-bg) !important;
+        color: var(--input-text) !important;
+        border-color: var(--input-border) !important;
+    }}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
     .main .block-container {
         max-width: 1320px !important;
         padding-top: 1.5rem !important;
@@ -491,8 +562,8 @@ st.markdown("""
 
     /* Sidebar Styling */
     section[data-testid="stSidebar"] {
-        background-color: var(--secondary-background-color) !important;
-        border-right: 1px solid rgba(128, 128, 128, 0.2) !important;
+        background-color: var(--bg-sidebar) !important;
+        border-right: 1px solid var(--border-color) !important;
     }
 
     /* Responsive adjustments */
@@ -538,6 +609,22 @@ st.markdown(f"""
 # SIDEBAR: KONTROL OPERASIONAL GERBANG
 # ==============================================================================
 with st.sidebar:
+    st.markdown("### 🌓 Mode Tampilan Web")
+    curr_theme = st.session_state.get("app_theme", "Dark")
+    theme_choice = st.radio(
+        "Pilih Tema:",
+        ["🌙 Gelap (Dark)", "☀️ Terang (Light)"],
+        index=0 if curr_theme == "Dark" else 1,
+        horizontal=True,
+        label_visibility="collapsed",
+        key="sidebar_theme_toggle_radio",
+    )
+    new_theme = "Light" if "Terang" in theme_choice else "Dark"
+    if new_theme != curr_theme:
+        st.session_state["app_theme"] = new_theme
+        st.rerun()
+
+    st.divider()
     st.header("🏢 Pos Gerbang Parkir")
     
     gate_dir_mode = st.selectbox(
@@ -568,8 +655,13 @@ with st.sidebar:
 
     st.divider()
     st.subheader("💰 Tarif Parkir Resmi")
-    for cat, fee in TARIFFS.items():
-        st.write(f"- **{cat}**: {rupiah(fee)}")
+    st.markdown("""
+    - **👨‍🏫 Dosen & Tendik**: Gratis (Rp 0)
+    - **🎓 Mahasiswa**: Rp 2.000 *(Flat Seharian)*
+    - **🚗 Tamu / Umum**:
+      - 1 Jam Pertama: **Rp 3.000**
+      - Jam Berikutnya: **+Rp 2.000 / jam**
+    """)
 
     st.divider()
     with st.expander("⚙️ Parameter Teknis & AI (Lanjutan)", expanded=False):
@@ -952,8 +1044,8 @@ with tab_gate:
                 <div class="empty-pills">
                     <span class="pill-mini">🤖 Verifikasi Database Otomatis</span>
                     <span class="pill-mini">🎓 Dosen: Rp0</span>
-                    <span class="pill-mini">🎒 Mahasiswa: Rp2.000</span>
-                    <span class="pill-mini">🏷️ Tamu: Rp5.000</span>
+                    <span class="pill-mini">🎒 Mahasiswa: Rp2.000 Flat</span>
+                    <span class="pill-mini">🏷️ Tamu: Rp3.000 (Jam 1) + Rp2.000/Jam</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -1036,6 +1128,20 @@ with tab_gate:
                     f"<div>🕒 <b>Waktu Masuk:</b><br><span style='font-size:0.92rem; color:#475569;'>{now_str}</span></div>"
                 )
 
+            fee_note = ""
+            if "Tamu" in str(dec_result.get("category", "")):
+                if gate_code == "IN":
+                    fee_note = "<div style='font-size:0.75rem; color:#64748b;'>Tarif 1 Jam Pertama (+Rp2.000/jam)</div>"
+                elif duration_minutes > 60:
+                    extra_h = (duration_minutes - 1) // 60
+                    fee_note = f"<div style='font-size:0.75rem; color:#64748b;'>1 Jam Pertama (Rp3.000) + {extra_h} Jam x Rp2.000</div>"
+                else:
+                    fee_note = "<div style='font-size:0.75rem; color:#64748b;'>Tarif 1 Jam Pertama (<= 60 Menit)</div>"
+            elif "Mahasiswa" in str(dec_result.get("category", "")):
+                fee_note = "<div style='font-size:0.75rem; color:#64748b;'>Tarif Flat Subsidi Kampus (Seharian)</div>"
+            elif "Dosen" in str(dec_result.get("category", "")):
+                fee_note = "<div style='font-size:0.75rem; color:#10b981;'>Akses Sivitas Akademika Gratis</div>"
+
             # Kartu Tiket Digital Modern
             card_html = f"""
             <div class="ticket-card">
@@ -1053,7 +1159,7 @@ with tab_gate:
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 0.95rem;">
                     <div>👤 <b>Nama Pemilik:</b><br><span style="font-size:1.1rem; font-weight:700;">{dec_result.get('owner_name') or 'Tidak Valid'}</span></div>
                     <div>🏷️ <b>Kategori Civitas:</b><br><span style="font-size:1.1rem; font-weight:700;">{dec_result.get('category')}</span></div>
-                    <div>💵 <b>Total Biaya Parkir:</b><br><span style="font-size:1.45rem; font-weight:800; color:#2563eb;">{rupiah(dec_result.get('fee'))}</span></div>
+                    <div>💵 <b>Total Biaya Parkir:</b><br><span style="font-size:1.45rem; font-weight:800; color:#2563eb;">{rupiah(dec_result.get('fee'))}</span>{fee_note}</div>
                     <div>🚪 <b>Aksi Gerbang:</b><br><span style="font-size:1.02rem; font-weight:700;">{gate_status_label}</span></div>
                     {extra_gate_info}
                 </div>

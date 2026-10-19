@@ -3,15 +3,43 @@ import re
 from datetime import datetime
 from typing import Dict, Any, Optional, Tuple, List
 
-# Tarif default berdasarkan kategori
+# Tarif parkir resmi kampus
+TAMU_FIRST_HOUR_FEE: int = 3000   # 1 jam pertama tamu
+TAMU_EXTRA_HOUR_FEE: int = 2000   # Setiap 1 jam berikutnya tamu
+MHS_FLAT_FEE: int = 2000          # Flat seharian untuk mahasiswa
+DOSEN_FEE: int = 0                # Gratis untuk dosen & staf
+
 DEFAULT_TARIFFS: Dict[str, int] = {
-    "Dosen": 0,
-    "Mahasiswa": 2000,
-    "Tamu": 5000,
+    "Dosen": DOSEN_FEE,
+    "Mahasiswa": MHS_FLAT_FEE,
+    "Tamu": TAMU_FIRST_HOUR_FEE,
 }
 
 TARIFFS = dict(DEFAULT_TARIFFS)
 CATEGORIES = list(TARIFFS.keys())
+
+
+def calculate_parking_fee(category: Optional[str], duration_minutes: int = 0) -> int:
+    """
+    Menghitung biaya parkir berdasarkan kategori civitas dan durasi parkir:
+    - Dosen & Tendik: Rp 0 (Gratis)
+    - Mahasiswa: Rp 2.000 (Flat Seharian)
+    - Tamu / Tidak Terdaftar:
+        * 1 Jam Pertama (0-60 menit): Rp 3.000
+        * Setiap 1 Jam Berikutnya: +Rp 2.000 / jam
+    """
+    cat = (category or "").strip()
+    if cat == "Dosen":
+        return DOSEN_FEE
+    if cat == "Mahasiswa":
+        return MHS_FLAT_FEE
+
+    # Tamu / Belum Terdaftar
+    if duration_minutes <= 60:
+        return TAMU_FIRST_HOUR_FEE
+
+    extra_hours = (duration_minutes - 1) // 60
+    return TAMU_FIRST_HOUR_FEE + (extra_hours * TAMU_EXTRA_HOUR_FEE)
 
 
 def normalize_plate(value: Optional[str]) -> str:
@@ -406,16 +434,14 @@ def decide(
 
     # 1. KENDARAAN TAMU / TIDAK TERDAFTAR DI DATABASE
     if vehicle_data is None:
-        base_fee = TARIFFS.get("Tamu", 5000)
-        # Jika keluar dan ada durasi lebih dari 2 jam, bisa hitung progresif atau flat
-        fee = base_fee
+        fee = calculate_parking_fee("Tamu", duration_minutes)
         if gate_direction == "OUT":
             if entry_record:
                 decision = f"TAMU SELESAI PARKIR ({duration_display}) — TOTAL BAYAR {rupiah(fee)}"
             else:
                 decision = f"TAMU KELUAR GERBANG — WAJIB BAYAR {rupiah(fee)}"
         else:
-            decision = f"KENDARAAN TAMU MASUK — TIKET TERCETAK (TARIF {rupiah(fee)})"
+            decision = f"KENDARAAN TAMU MASUK — TIKET TERCETAK (TARIF {rupiah(fee)} / 1 JAM PERTAMA)"
 
         return {
             "plate": display_plate,
@@ -437,7 +463,7 @@ def decide(
     owner_name = vehicle_data.get("owner_name", "")
     registered_plate = vehicle_data.get("plate", display_plate)
     
-    fee = TARIFFS.get(category, 2000)
+    fee = calculate_parking_fee(category, duration_minutes)
 
     if gate_direction == "OUT":
         if fee == 0:
@@ -448,7 +474,7 @@ def decide(
         if fee == 0:
             decision = "DOSEN TERDAFTAR — PARKIR GRATIS"
         else:
-            decision = f"{category.upper()} TERDAFTAR — WAJIB BAYAR {rupiah(fee)}"
+            decision = f"{category.upper()} TERDAFTAR — TARIF FLAT {rupiah(fee)}"
 
     return {
         "plate": registered_plate,

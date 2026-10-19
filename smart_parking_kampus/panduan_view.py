@@ -786,7 +786,7 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
                 </div>
             </div>
             <p class="timeline-card-desc">
-                Plat dicocokkan ke database kampus: <strong>Dosen (Rp0 / Gratis)</strong>, <strong>Mahasiswa (Rp2.000 flat)</strong>, dan <strong>Tamu (Rp5.000)</strong>. Pada gerbang KELUAR (OUT), sistem otomatis menghitung durasi parkir dari waktu masuk terakhir (contoh: <em>45 Menit</em> atau <em>2 Jam 10 Menit</em>).
+                Plat dicocokkan ke database kampus: <strong>Dosen (Rp0 / Gratis)</strong>, <strong>Mahasiswa (Rp2.000 flat seharian)</strong>, dan <strong>Tamu (Rp3.000 untuk 1 jam pertama + Rp2.000 per jam berikutnya)</strong>. Pada gerbang KELUAR (OUT), sistem otomatis menghitung durasi parkir dari waktu masuk terakhir (contoh: <em>45 Menit</em> atau <em>2 Jam 10 Menit</em>).
             </p>
         </div>
     </div>
@@ -887,10 +887,11 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
         <div>
             <span class="tariff-badge gold">PENGUNJUNG LUAR</span>
             <div class="tariff-role">🚗 Tamu / Umum</div>
-            <div class="tariff-price guest">Rp 5.000</div>
+            <div class="tariff-price guest">Rp 3.000</div>
+            <div style="font-size:0.75rem; font-weight:700; color:var(--guide-text-secondary); margin-top:-4px; margin-bottom:8px;">1 JAM PERTAMA (+Rp 2.000 / JAM)</div>
         </div>
         <p class="tariff-desc">
-            Kendaraan tamu atau luar kampus yang belum terdaftar. Tiket virtual otomatis diterbitkan saat masuk melalui gerbang IN.
+            Kendaraan tamu atau luar kampus yang belum terdaftar. Tarif 1 jam pertama Rp 3.000, lalu setiap jam berikutnya bertambah Rp 2.000. Tiket virtual otomatis diterbitkan saat masuk gerbang IN.
         </p>
     </div>
 </div>
