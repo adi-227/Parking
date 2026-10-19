@@ -1128,12 +1128,13 @@ with tab_gate:
                     f"<div>🕒 <b>Waktu Masuk:</b><br><span style='font-size:0.92rem; color:#475569;'>{now_str}</span></div>"
                 )
 
+            dur_mins = dec_result.get("duration_minutes", 0)
             fee_note = ""
             if "Tamu" in str(dec_result.get("category", "")):
                 if gate_code == "IN":
                     fee_note = "<div style='font-size:0.75rem; color:#64748b;'>Tarif 1 Jam Pertama (+Rp2.000/jam)</div>"
-                elif duration_minutes > 60:
-                    extra_h = (duration_minutes - 1) // 60
+                elif dur_mins > 60:
+                    extra_h = (dur_mins - 1) // 60
                     fee_note = f"<div style='font-size:0.75rem; color:#64748b;'>1 Jam Pertama (Rp3.000) + {extra_h} Jam x Rp2.000</div>"
                 else:
                     fee_note = "<div style='font-size:0.75rem; color:#64748b;'>Tarif 1 Jam Pertama (<= 60 Menit)</div>"
