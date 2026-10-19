@@ -25,6 +25,7 @@ from parking_logic import (
     is_valid_plate_pattern,
     is_plausible_plate_box,
     extract_candidate_plate_boxes,
+    SmoothBoxTracker,
 )
 import db_manager
 from dataset_validator import validate_dataset
@@ -605,7 +606,7 @@ with tab_gate:
                         self.lock = threading.Lock()
                         self.latest_frame = None
                         self.frame_count = 0
-                        self.box = None
+                        self.tracker = SmoothBoxTracker(alpha=0.65, max_miss_frames=8)
 
                     def recv(self, frame):
                         img = frame.to_ndarray(format="bgr24")
@@ -615,29 +616,27 @@ with tab_gate:
                         with self.lock:
                             self.latest_frame = img.copy()
 
-                        # Deteksi kotak plat dengan YOLO tiap 3 frame (responsif & mulus)
+                        # Deteksi kotak plat dengan YOLO tiap beberapa frame
                         step = max(2, min(frame_skip, 4))
                         if self.frame_count % step == 0:
-                            found_box = None
+                            cands = []
                             try:
                                 preds = model.predict(source=img, conf=0.25, verbose=False, imgsz=480)
                                 if preds and len(preds[0].boxes) > 0:
                                     cands = extract_candidate_plate_boxes(preds[0].boxes, frame_w=w, frame_h=h)
-                                    if cands:
-                                        found_box = cands[0][0]
                             except Exception:
-                                pass
+                                cands = []
                             with self.lock:
-                                self.box = found_box
-
-                        with self.lock:
-                            cur_box = self.box
+                                cur_box = self.tracker.update(cands)
+                        else:
+                            with self.lock:
+                                cur_box = self.tracker.get_box()
 
                         if cur_box:
                             x1, y1, x2, y2 = cur_box
                             x1, y1 = max(0, x1), max(0, y1)
                             x2, y2 = min(w, x2), min(h, y2)
-                            # Kotak hijau neon dinamis yang presisi mengikuti plat nomor bergerak
+                            # Kotak hijau neon dinamis yang presisi & stabil mengikuti plat nomor
                             cv2.rectangle(img, (x1, y1), (x2, y2), (0, 240, 0), 3)
 
                             # Badge status "PLAT TERDETEKSI" di atas kotak
@@ -691,12 +690,15 @@ with tab_gate:
                 if btn_scan and ctx.video_processor:
                     with ctx.video_processor.lock:
                         snap = ctx.video_processor.latest_frame
+                        last_tracked = ctx.video_processor.tracker.get_box()
                     if snap is not None:
                         with st.spinner("AI sedang memeriksa plat nomor kendaraan..."):
                             sh, sw = snap.shape[:2]
                             eff_conf = min(conf_threshold, 0.25)
                             preds = model.predict(source=snap, conf=eff_conf, verbose=False, imgsz=640)
                             candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=sw, frame_h=sh)
+                            if not candidates and last_tracked:
+                                candidates = [(last_tracked, 0.50, "tracked_fallback")]
                             found = []
                             for box, box_conf, kind in candidates:
                                 x1, y1, x2, y2 = box

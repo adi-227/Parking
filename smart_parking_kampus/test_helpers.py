@@ -10,6 +10,8 @@ from parking_logic import (
     is_valid_plate_pattern,
     is_plausible_plate_box,
     extract_candidate_plate_boxes,
+    compute_iou,
+    SmoothBoxTracker,
     format_duration,
     decide,
     rupiah,
@@ -181,6 +183,55 @@ class TestParkingLogic(unittest.TestCase):
         self.assertEqual(res_t["fee"], 5000)
         self.assertIn("45 Menit", res_t["duration_display"])
         self.assertIn("5.000", res_t["decision"])
+
+    def test_compute_iou(self):
+        # 1. Identical boxes
+        boxA = (100, 100, 200, 200)
+        self.assertAlmostEqual(compute_iou(boxA, boxA), 1.0)
+
+        # 2. Disjoint boxes
+        boxB = (300, 300, 400, 400)
+        self.assertEqual(compute_iou(boxA, boxB), 0.0)
+
+        # 3. Partial overlap (50% area overlap)
+        # boxA: [0, 0, 10, 10], area = 100
+        # boxC: [5, 0, 15, 10], area = 100
+        # intersection: [5, 0, 10, 10], area = 50
+        # union: 100 + 100 - 50 = 150 -> IoU = 50/150 = 1/3
+        box1 = (0, 0, 10, 10)
+        box2 = (5, 0, 15, 10)
+        self.assertAlmostEqual(compute_iou(box1, box2), 50.0 / 150.0)
+
+    def test_smooth_box_tracker(self):
+        tracker = SmoothBoxTracker(alpha=0.6, max_miss_frames=3)
+
+        # 1. First detection: instantaneous response without lag
+        box1 = (100, 100, 200, 200)
+        res1 = tracker.update([(box1, 0.9, "standard")])
+        self.assertEqual(res1, box1)
+
+        # 2. Slight jitter on next frame: coordinates are smoothed (no sudden jerk)
+        # Shifted by 10px on x1
+        box2 = (110, 100, 210, 200)
+        res2 = tracker.update([(box2, 0.9, "standard")])
+        # x1 = 0.6 * 110 + 0.4 * 100 = 66 + 40 = 106
+        self.assertEqual(res2[0], 106)
+        self.assertEqual(res2[1], 100)
+
+        # 3. Persistence / Hysteresis: 1 missed frame does NOT clear the box
+        res_miss1 = tracker.update([])
+        self.assertIsNotNone(res_miss1)
+        self.assertEqual(res_miss1, res2)
+
+        # 4. 2nd missed frame still retains box
+        res_miss2 = tracker.update([])
+        self.assertIsNotNone(res_miss2)
+
+        # 5. After max_miss_frames exceeded, box cleanly expires
+        tracker.update([])
+        res_expired = tracker.update([])
+        self.assertIsNone(res_expired)
+        self.assertIsNone(tracker.get_box())
 
 
 class TestDatabaseManager(unittest.TestCase):

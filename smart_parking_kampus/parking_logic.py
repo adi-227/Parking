@@ -229,8 +229,111 @@ def extract_candidate_plate_boxes(yolo_boxes, frame_w: int = 640, frame_h: int =
     candidates.sort(key=lambda item: item[1], reverse=True)
     return candidates
 
-    candidates.sort(key=lambda item: item[1], reverse=True)
-    return candidates
+
+def compute_iou(boxA: Tuple[int, int, int, int], boxB: Tuple[int, int, int, int]) -> float:
+    """Menghitung Intersection over Union (IoU) antara dua bounding box (x1, y1, x2, y2)."""
+    xA = max(boxA[0], boxB[0])
+    yA = max(boxA[1], boxB[1])
+    xB = min(boxA[2], boxB[2])
+    yB = min(boxA[3], boxB[3])
+
+    inter_w = max(0, xB - xA)
+    inter_h = max(0, yB - yA)
+    inter_area = inter_w * inter_h
+    if inter_area <= 0:
+        return 0.0
+
+    areaA = max(0, boxA[2] - boxA[0]) * max(0, boxA[3] - boxA[1])
+    areaB = max(0, boxB[2] - boxB[0]) * max(0, boxB[3] - boxB[1])
+    union_area = areaA + areaB - inter_area
+    if union_area <= 0:
+        return 0.0
+
+    return float(inter_area) / float(union_area)
+
+
+class SmoothBoxTracker:
+    """
+    Pelacak bounding box temporal untuk kamera real-time:
+    1. EMA (Exponential Moving Average) smoothing untuk koordinat [x1, y1, x2, y2]
+       agar kotak tidak bergetar / jitter saat kamera sedikit bergerak.
+    2. IoU / Spatial Proximity matching ketika ada beberapa kandidat deteksi,
+       mencegah kotak melompat-lompat antar kandidat (misal standard vs adjusted).
+    3. Hysteresis / Persistence (grace period): Jika deteksi terlewat 1-6 frame
+       karena motion blur atau variasi cahaya sesaat, kotak tidak langsung lenyap (flicker).
+    """
+
+    def __init__(self, alpha: float = 0.65, max_miss_frames: int = 8):
+        self.alpha = float(alpha)
+        self.max_miss_frames = int(max_miss_frames)
+        self.current_box: Optional[Tuple[int, int, int, int]] = None
+        self.smoothed_box: Optional[List[float]] = None
+        self.miss_count: int = 0
+
+    def update(self, candidates: List[Any]) -> Optional[Tuple[int, int, int, int]]:
+        """
+        candidates: daftar tuple (box, conf, kind) dari extract_candidate_plate_boxes.
+        Mengembalikan box aktif yang sudah di-smoothing (x1, y1, x2, y2) atau None jika tidak ada target.
+        """
+        if not candidates:
+            self.miss_count += 1
+            if self.miss_count > self.max_miss_frames:
+                self.current_box = None
+                self.smoothed_box = None
+                return None
+            return self.get_box()
+
+        # Pilih kandidat terbaik:
+        # Jika sudah ada box yang sedang dilacak, cari kandidat dengan IoU tertinggi
+        # untuk menjaga kontinuitas tracking.
+        best_box = None
+        if self.current_box is not None:
+            best_iou = -1.0
+            best_cand_box = None
+            for cand in candidates:
+                cand_box = cand[0] if isinstance(cand, (list, tuple)) else cand
+                iou = compute_iou(self.current_box, cand_box)
+                if iou > best_iou:
+                    best_iou = iou
+                    best_cand_box = cand_box
+
+            # Jika IoU memadai (> 0.15), gunakan kandidat terdekat tersebut
+            if best_iou > 0.15 and best_cand_box is not None:
+                best_box = best_cand_box
+            else:
+                first = candidates[0]
+                best_box = first[0] if isinstance(first, (list, tuple)) else first
+        else:
+            first = candidates[0]
+            best_box = first[0] if isinstance(first, (list, tuple)) else first
+
+        self.miss_count = 0
+        self.current_box = (int(best_box[0]), int(best_box[1]), int(best_box[2]), int(best_box[3]))
+
+        if self.smoothed_box is None:
+            self.smoothed_box = [float(c) for c in self.current_box]
+        else:
+            self.smoothed_box = [
+                self.alpha * float(new_c) + (1.0 - self.alpha) * float(old_c)
+                for new_c, old_c in zip(self.current_box, self.smoothed_box)
+            ]
+
+        return self.get_box()
+
+    def get_box(self) -> Optional[Tuple[int, int, int, int]]:
+        if self.smoothed_box is None:
+            return None
+        return (
+            int(round(self.smoothed_box[0])),
+            int(round(self.smoothed_box[1])),
+            int(round(self.smoothed_box[2])),
+            int(round(self.smoothed_box[3])),
+        )
+
+    def reset(self):
+        self.current_box = None
+        self.smoothed_box = None
+        self.miss_count = 0
 
 
 def format_duration(minutes: int) -> str:
