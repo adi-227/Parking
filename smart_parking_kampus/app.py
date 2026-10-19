@@ -10,8 +10,10 @@ from datetime import datetime
 import importlib
 import parking_logic
 import ocr_engine
+import panduan_view
 importlib.reload(parking_logic)
 importlib.reload(ocr_engine)
+importlib.reload(panduan_view)
 
 from parking_logic import (
     normalize_plate,
