@@ -1240,35 +1240,197 @@ with tab_gate:
                 st.rerun()
 
 # ==============================================================================
-# TAB 2: DATA KENDARAAN KAMPUS (ADMIN DATABASE)
+# TAB 2: DATA KENDARAAN KAMPUS (ADMIN DATABASE & CRUD)
 # ==============================================================================
 with tab_vehicles:
-    st.subheader("Data Master Kendaraan Terdaftar (Civitas Akademika)")
-    st.caption("Pihak kampus mendaftarkan Dosen dan Mahasiswa di sini agar mendapatkan hak parkir resmi / gratis.")
+    st.subheader("Data Master Kendaraan Sivitas Kampus")
+    st.caption("Pusat pengelolaan data kendaraan resmi (Dosen & Mahasiswa) serta pemantauan status parkir aktif di lingkungan kampus.")
 
-    col_add, col_csv = st.columns([1, 1])
+    # 1. Ringkasan Status Parkir Kendaraan Civitas
+    all_reg_summary = db_manager.list_vehicles()
+    total_civitas = len(all_reg_summary)
+    inside_civitas = sum(1 for v in all_reg_summary if v.get("is_parked"))
+    outside_civitas = total_civitas - inside_civitas
 
-    with col_add:
-        st.markdown("#### ➕ Tambah / Perbarui Kendaraan")
+    c_sum1, c_sum2, c_sum3 = st.columns(3)
+    c_sum1.metric("👥 Total Kendaraan Terdaftar", f"{total_civitas} Unit")
+    c_sum2.metric("🟢 Sedang Parkir di Dalam", f"{inside_civitas} Unit")
+    c_sum3.metric("⚪ Sedang di Luar Kampus", f"{outside_civitas} Unit")
+
+    if inside_civitas > 0:
+        st.success(f"🟢 **{inside_civitas} kendaraan sivitas terdaftar** saat ini sedang berada di dalam area parkir kampus.")
+
+    # Sub-tabs CRUD: Daftar & Status, Tambah Baru, Edit Kendaraan, Hapus Kendaraan, Impor & Ekspor
+    crud_tab1, crud_tab2, crud_tab3, crud_tab4, crud_tab5 = st.tabs([
+        "📋 Daftar & Status Parkir",
+        "➕ Tambah Kendaraan Baru",
+        "✏️ Edit / Perbarui Data",
+        "🗑️ Hapus Kendaraan",
+        "📥 Impor & Ekspor CSV",
+    ])
+
+    # --------------------------------------------------------------------------
+    # CRUD 1: DAFTAR & STATUS PARKIR (READ)
+    # --------------------------------------------------------------------------
+    with crud_tab1:
+        f_c1, f_c2, f_c3 = st.columns([2, 1, 1])
+        search_q = f_c1.text_input("🔍 Cari Plat / Nama Pemilik", "", key="search_veh_tab2")
+        filter_k = f_c2.selectbox("Filter Kategori", ["Semua", "Dosen", "Mahasiswa"], key="filter_cat_tab2")
+        filter_status = f_c3.selectbox(
+            "Status Parkir",
+            ["Semua Status", "🟢 Sedang di Dalam Saja", "⚪ Sedang di Luar Saja"],
+            key="filter_park_tab2"
+        )
+
+        kendaraan_list = db_manager.list_vehicles(
+            query=search_q,
+            category_filter=filter_k if filter_k != "Semua" else None
+        )
+
+        if filter_status == "🟢 Sedang di Dalam Saja":
+            kendaraan_list = [k for k in kendaraan_list if k.get("is_parked")]
+        elif filter_status == "⚪ Sedang di Luar Saja":
+            kendaraan_list = [k for k in kendaraan_list if not k.get("is_parked")]
+
+        if kendaraan_list:
+            display_rows = []
+            for k in kendaraan_list:
+                display_rows.append({
+                    "Plat Nomor": format_plate_display(k["plate"]),
+                    "Nama Pemilik": k.get("owner_name") or "-",
+                    "Kategori": k.get("category"),
+                    "Status Parkir": k.get("parking_status"),
+                    "Waktu Masuk": k.get("entry_time").replace("T", " ") if k.get("entry_time") else "-",
+                    "Terdaftar Sejak": (k.get("created_at") or "-")[:10],
+                })
+            df_display = pd.DataFrame(display_rows)
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+            csv_exp = df_display.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                "📥 Unduh Daftar Kendaraan (CSV)",
+                data=csv_exp,
+                file_name="data_kendaraan_kampus.csv",
+                mime="text/csv",
+                key="btn_download_veh_csv"
+            )
+        else:
+            st.info("Belum ada kendaraan yang cocok dengan filter pencarian.")
+
+    # --------------------------------------------------------------------------
+    # CRUD 2: TAMBAH KENDARAAN BARU (CREATE)
+    # --------------------------------------------------------------------------
+    with crud_tab2:
+        st.markdown("#### ➕ Registrasi Kendaraan Baru (Dosen / Mahasiswa)")
+        st.caption("Masukkan plat nomor dan data sivitas kampus agar terverifikasi otomatis saat pemeriksaan kamera.")
         with st.form("form_tambah_kendaraan", clear_on_submit=True):
-            in_plat = st.text_input("Nomor Plat", placeholder="Contoh: B 1234 XYZ")
-            in_nama = st.text_input("Nama Pemilik", placeholder="Nama Dosen atau Mahasiswa")
-            in_kat = st.selectbox("Kategori", ["Dosen", "Mahasiswa"])
-            submit_btn = st.form_submit_button("Simpan ke Database", type="primary")
-
+            col_t1, col_t2 = st.columns(2)
+            with col_t1:
+                in_plat = st.text_input("Nomor Plat Kendaraan", placeholder="Contoh: B 1234 XYZ atau F 4526 FCF")
+                in_kat = st.selectbox("Kategori Civitas", ["Mahasiswa", "Dosen"])
+            with col_t2:
+                in_nama = st.text_input("Nama Lengkap Pemilik", placeholder="Contoh: Farel Maulana / Prof. Dr. Hendra")
+            
+            submit_btn = st.form_submit_button("➕ Daftarkan Kendaraan", type="primary", use_container_width=True)
             if submit_btn:
-                try:
-                    is_up, msg = db_manager.upsert_vehicle(in_plat, in_nama, in_kat)
-                    st.success(msg)
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Gagal menyimpan: {exc}")
+                if not in_plat.strip() or not in_nama.strip():
+                    st.error("Nomor plat dan nama pemilik wajib diisi!")
+                else:
+                    try:
+                        is_up, msg = db_manager.upsert_vehicle(in_plat, in_nama, in_kat)
+                        st.success(f"🎉 {msg}")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Gagal mendaftarkan kendaraan: {exc}")
 
-    with col_csv:
-        st.markdown("#### 📥 Impor & Ekspor Data CSV")
+    # --------------------------------------------------------------------------
+    # CRUD 3: EDIT DATA KENDARAAN (UPDATE)
+    # --------------------------------------------------------------------------
+    with crud_tab3:
+        st.markdown("#### ✏️ Perbarui / Koreksi Data Kendaraan")
+        st.caption("Ubah nama pemilik, kategori, atau perbaiki nomor plat jika sebelumnya salah ketik.")
+
+        if all_reg_summary:
+            edit_options = {
+                f"{format_plate_display(v['plate'])} — {v['owner_name']} ({v['category']})": v
+                for v in all_reg_summary
+            }
+            selected_edit_label = st.selectbox(
+                "Pilih Kendaraan yang Ingin Diperbarui:",
+                ["— Pilih Kendaraan —"] + list(edit_options.keys()),
+                key="select_edit_veh"
+            )
+
+            if selected_edit_label != "— Pilih Kendaraan —":
+                chosen = edit_options[selected_edit_label]
+                st.info(f"Status Kendaraan: **{chosen.get('parking_status')}**")
+
+                with st.form("form_edit_kendaraan"):
+                    col_e1, col_e2 = st.columns(2)
+                    with col_e1:
+                        new_plat_input = st.text_input("Nomor Plat", value=format_plate_display(chosen["plate"]))
+                        cur_idx = 0 if chosen.get("category") == "Dosen" else 1
+                        new_kat_input = st.selectbox("Kategori", ["Dosen", "Mahasiswa"], index=cur_idx)
+                    with col_e2:
+                        new_nama_input = st.text_input("Nama Pemilik", value=chosen.get("owner_name") or "")
+
+                    btn_save_edit = st.form_submit_button("💾 Simpan Perubahan Kendaraan", type="primary", use_container_width=True)
+                    if btn_save_edit:
+                        if not new_plat_input.strip() or not new_nama_input.strip():
+                            st.error("Nomor plat dan nama pemilik tidak boleh kosong!")
+                        else:
+                            success = db_manager.update_vehicle(
+                                old_plate=chosen["plate"],
+                                new_owner_name=new_nama_input,
+                                new_category=new_kat_input,
+                                new_plate=new_plat_input,
+                            )
+                            if success:
+                                st.success(f"✅ Data kendaraan {new_plat_input} berhasil diperbarui!")
+                                st.rerun()
+                            else:
+                                st.error("Gagal memperbarui data kendaraan.")
+        else:
+            st.info("Belum ada kendaraan terdaftar untuk diedit.")
+
+    # --------------------------------------------------------------------------
+    # CRUD 4: HAPUS KENDARAAN (DELETE)
+    # --------------------------------------------------------------------------
+    with crud_tab4:
+        st.markdown("#### 🗑️ Hapus Kendaraan Terdaftar")
+        st.caption("Hapus data kendaraan dari daftar terdaftar jika pemilik sudah lulus atau tidak aktif lagi.")
+
+        if all_reg_summary:
+            del_options = {
+                f"{format_plate_display(v['plate'])} — {v['owner_name']} ({v['category']})": v["plate"]
+                for v in all_reg_summary
+            }
+            del_label = st.selectbox(
+                "Pilih Kendaraan yang Ingin Dihapus:",
+                ["— Pilih Kendaraan —"] + list(del_options.keys()),
+                key="select_del_veh"
+            )
+
+            if del_label != "— Pilih Kendaraan —":
+                target_plat = del_options[del_label]
+                st.warning(f"⚠️ Perhatian: Anda akan menghapus data kendaraan **{format_plate_display(target_plat)}** dari database kampus.")
+                confirm_del = st.checkbox(f"Saya yakin ingin menghapus data kendaraan {format_plate_display(target_plat)}", key="chk_del_veh")
+                
+                if st.button("🗑️ Hapus Kendaraan Sekarang", type="secondary", disabled=not confirm_del, use_container_width=True):
+                    db_manager.delete_vehicle(target_plat)
+                    st.success(f"Kendaraan {format_plate_display(target_plat)} berhasil dihapus dari database.")
+                    st.rerun()
+        else:
+            st.info("Belum ada kendaraan terdaftar.")
+
+    # --------------------------------------------------------------------------
+    # CRUD 5: IMPOR & EKSPOR CSV
+    # --------------------------------------------------------------------------
+    with crud_tab5:
+        st.markdown("#### 📥 Impor Data Kendaraan dari CSV")
         st.caption("Unggah file CSV dengan kolom: `plate, owner_name, category`")
         uploaded_csv = st.file_uploader("Pilih file CSV", type=["csv"], key="uploader_csv_v")
-        
+
         if uploaded_csv is not None:
             try:
                 df_csv = pd.read_csv(uploaded_csv, dtype=str).fillna("")
@@ -1276,8 +1438,8 @@ with tab_vehicles:
                 if not req_cols.issubset(set(df_csv.columns)):
                     st.error("Kolom wajib CSV: plate, owner_name, category.")
                 else:
-                    st.dataframe(df_csv.head(3), use_container_width=True, hide_index=True)
-                    if st.button("Proses Impor CSV"):
+                    st.dataframe(df_csv.head(5), use_container_width=True, hide_index=True)
+                    if st.button("Proses Impor CSV", type="primary"):
                         count_success = 0
                         for _, row in df_csv.iterrows():
                             p = row["plate"].strip()
@@ -1299,34 +1461,6 @@ with tab_vehicles:
             mime="text/csv",
         )
 
-    st.divider()
-    st.markdown("#### 📋 Daftar Kendaraan Terdaftar")
-
-    f_col1, f_col2 = st.columns([2, 1])
-    search_q = f_col1.text_input("🔍 Cari Plat / Nama Pemilik", "")
-    filter_k = f_col2.selectbox("Filter Kategori", ["Semua", "Dosen", "Mahasiswa"])
-
-    kendaraan_list = db_manager.list_vehicles(query=search_q, category_filter=filter_k)
-
-    if kendaraan_list:
-        df_display = pd.DataFrame(kendaraan_list)
-        st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-        col_act1, col_act2 = st.columns([1, 1])
-        with col_act1:
-            csv_exp = df_display.to_csv(index=False).encode("utf-8-sig")
-            st.download_button("📥 Ekspor Daftar Kendaraan ke CSV", data=csv_exp, file_name="data_kendaraan_kampus.csv", mime="text/csv")
-        
-        with col_act2:
-            plat_to_delete = st.selectbox("Pilih Plat yang Ingin Dihapus:", ["— Pilih —"] + [k["plate"] for k in kendaraan_list])
-            if plat_to_delete != "— Pilih —":
-                if st.button(f"🗑️ Hapus {plat_to_delete}", type="secondary"):
-                    db_manager.delete_vehicle(plat_to_delete)
-                    st.success(f"Kendaraan {plat_to_delete} berhasil dihapus.")
-                    st.rerun()
-    else:
-        st.info("Belum ada kendaraan yang cocok dengan pencarian.")
-
 # ==============================================================================
 # TAB 3: LAPORAN & RIWAYAT TRANSAKSI
 # ==============================================================================
@@ -1343,10 +1477,44 @@ with tab_history:
     m6.metric("Total Pendapatan", rupiah(metrics["total_revenue"]))
 
     st.divider()
+
+    # --------------------------------------------------------------------------
+    # 1. KENDARAAN SEDANG PARKIR DI DALAM KAMPUS (SESI AKTIF)
+    # --------------------------------------------------------------------------
+    st.markdown("### 🚨 Kendaraan Sedang Parkir di Dalam Kampus (Sesi Aktif)")
+    st.caption("Daftar seluruh kendaraan (motor/mobil civitas maupun tamu) yang sudah masuk (IN) dan belum keluar (OUT).")
+
+    active_parked_list = db_manager.get_currently_parked_vehicles()
+
+    if active_parked_list:
+        st.info(f"🟢 Terdeteksi **{len(active_parked_list)} unit kendaraan** yang saat ini masih berada di dalam area parkir kampus:")
+        active_table = []
+        for a in active_parked_list:
+            active_table.append({
+                "ID Transaksi": f"#{a.get('id')}",
+                "Plat Nomor": format_plate_display(a.get("plate")),
+                "Nama Pemilik": a.get("owner_name") or "(Tamu Luar)",
+                "Kategori": a.get("category") or "Tamu",
+                "Waktu Masuk": (a.get("created_at") or "").replace("T", " "),
+                "Durasi Berjalan": a.get("duration_text", "-"),
+                "Estimasi Tarif": rupiah(a.get("current_fee", 0)),
+                "Status": "🟢 Parkir di Dalam",
+            })
+        st.dataframe(pd.DataFrame(active_table), use_container_width=True, hide_index=True)
+    else:
+        st.success("✅ **Semua kendaraan telah keluar.** Saat ini tidak ada kendaraan yang sedang parkir di dalam area kampus.")
+
+    st.divider()
+
+    # --------------------------------------------------------------------------
+    # 2. LOG RIWAYAT TRANSAKSI LENGKAP & FILTER
+    # --------------------------------------------------------------------------
+    st.markdown("### 📋 Seluruh Riwayat Transaksi Gerbang")
+
     r_col1, r_col2, r_col3 = st.columns([2, 1, 1])
-    filter_plat_tx = r_col1.text_input("Filter Plat Transaksi", "")
-    filter_cat_tx = r_col2.selectbox("Filter Kategori", ["Semua", "Dosen", "Mahasiswa", "Tamu / Belum Terdaftar"])
-    limit_tx = r_col3.number_input("Batas Baris", min_value=10, max_value=1000, value=200, step=50)
+    filter_plat_tx = r_col1.text_input("Filter Plat Transaksi", "", key="filter_plat_tx_input")
+    filter_cat_tx = r_col2.selectbox("Filter Kategori", ["Semua", "Dosen", "Mahasiswa", "Tamu / Belum Terdaftar"], key="filter_cat_tx_select")
+    limit_tx = r_col3.number_input("Batas Baris", min_value=10, max_value=1000, value=200, step=50, key="limit_tx_num")
 
     tx_list = db_manager.list_transactions(
         limit=limit_tx,
@@ -1378,9 +1546,62 @@ with tab_history:
             data=display_tx.to_csv(index=False).encode("utf-8-sig"),
             file_name="laporan_transaksi_parkir.csv",
             mime="text/csv",
+            key="btn_download_tx_csv"
         )
     else:
         st.info("Belum ada catatan transaksi yang sesuai filter.")
+
+    st.divider()
+
+    # --------------------------------------------------------------------------
+    # 3. MANAJEMEN & PEMBERSIHAN RIWAYAT TRANSAKSI (CRUD RIWAYAT)
+    # --------------------------------------------------------------------------
+    with st.expander("⚙️ Manajemen & Pembersihan Riwayat Transaksi (Hapus Riwayat Agar Tidak Numpuk)", expanded=False):
+        st.markdown("Pilih opsi pembersihan riwayat transaksi di bawah ini sesuai kebutuhan:")
+
+        m_col1, m_col2, m_col3 = st.columns([1.2, 1.2, 1.1])
+
+        # Opsi 1: Bersihkan Riwayat Selesai (Rekomendasi Utama)
+        with m_col1:
+            st.markdown("##### 🧹 1. Bersihkan Riwayat Selesai")
+            st.caption("Menghapus log transaksi yang kendaraannya sudah keluar (OUT). **Sesi kendaraan yang sedang parkir (IN) tetap tersimpan aman** dan jumlah kendaraan tidak berubah.")
+            if st.button("🧹 Bersihkan Transaksi Selesai", type="primary", use_container_width=True, key="btn_clean_completed_tx"):
+                deleted_count = db_manager.delete_completed_transactions()
+                st.toast(f"Berhasil membersihkan {deleted_count} riwayat transaksi selesai!", icon="🧹")
+                st.rerun()
+
+        # Opsi 2: Hapus Transaksi Berdasarkan ID
+        with m_col2:
+            st.markdown("##### 🗑️ 2. Hapus Transaksi Tertentu")
+            st.caption("Hapus satu data transaksi tertentu jika terjadi salah scan kamera atau duplikasi data.")
+            if tx_list:
+                tx_choices = {
+                    f"#{t['id']} | {format_plate_display(t['plate'])} ({t.get('gate_direction')}) - {t['created_at'][:16]}": t["id"]
+                    for t in tx_list[:50]
+                }
+                del_choice_label = st.selectbox(
+                    "Pilih Transaksi:",
+                    ["— Pilih Transaksi —"] + list(tx_choices.keys()),
+                    key="select_del_tx_id"
+                )
+                if del_choice_label != "— Pilih Transaksi —":
+                    target_tx_id = tx_choices[del_choice_label]
+                    if st.button(f"🗑️ Hapus Transaksi #{target_tx_id}", type="secondary", use_container_width=True, key="btn_del_single_tx"):
+                        db_manager.delete_transaction(target_tx_id)
+                        st.toast(f"Transaksi #{target_tx_id} berhasil dihapus!", icon="🗑️")
+                        st.rerun()
+            else:
+                st.caption("Tidak ada riwayat untuk dihapus.")
+
+        # Opsi 3: Reset / Hapus Seluruh Riwayat
+        with m_col3:
+            st.markdown("##### ⚠️ 3. Reset Seluruh Riwayat")
+            st.caption("Menghapus seluruh riwayat log transaksi di database (reset total riwayat).")
+            confirm_reset_all = st.checkbox("Saya yakin ingin menghapus seluruh log transaksi", key="chk_confirm_reset_all_tx")
+            if st.button("⚠️ Hapus Seluruh Riwayat", type="secondary", disabled=not confirm_reset_all, use_container_width=True, key="btn_clear_all_tx_danger"):
+                cleared_count = db_manager.clear_all_transactions()
+                st.toast(f"Seluruh {cleared_count} transaksi riwayat berhasil direset!", icon="⚠️")
+                st.rerun()
 
 # ==============================================================================
 # TAB 4: PANDUAN SISTEM & STATUS AI

@@ -336,6 +336,87 @@ class TestDatabaseManager(unittest.TestCase):
         db_manager.save_transaction("B 5555 TAM", "Tamu 1", "Tamu", 5000, "Keluar", gate_direction="OUT", duration_minutes=45, db_path=self.db_path)
         self.assertEqual(db_manager.get_currently_parked_count(db_path=self.db_path), 0)
 
+    def test_update_and_delete_vehicle(self):
+        # 1. Tambah kendaraan
+        db_manager.upsert_vehicle("B 1234 XYZ", "Budi Santoso", "Mahasiswa", db_path=self.db_path)
+        # Catat transaksi masuk
+        tx_id = db_manager.save_transaction("B 1234 XYZ", "Budi Santoso", "Mahasiswa", 2000, "Masuk", gate_direction="IN", db_path=self.db_path)
+
+        # 2. Update kendaraan (ubah nama dan ganti plat nomor jika ada koreksi)
+        up_res = db_manager.update_vehicle(
+            old_plate="B 1234 XYZ",
+            new_owner_name="Budi Santoso S.T.",
+            new_category="Dosen",
+            new_plate="B 1234 ABC",
+            db_path=self.db_path
+        )
+        self.assertTrue(up_res)
+
+        # Cari dengan plat baru
+        found = db_manager.find_vehicle("B 1234 ABC", db_path=self.db_path)
+        self.assertIsNotNone(found)
+        self.assertEqual(found["owner_name"], "Budi Santoso S.T.")
+        self.assertEqual(found["category"], "Dosen")
+
+        # Pastikan transaksi lama juga terupdate platnya
+        txs = db_manager.list_transactions(db_path=self.db_path)
+        self.assertEqual(txs[0]["plate"], "B 1234 ABC")
+
+        # 3. Hapus kendaraan
+        del_res = db_manager.delete_vehicle("B 1234 ABC", db_path=self.db_path)
+        self.assertTrue(del_res)
+        self.assertIsNone(db_manager.find_vehicle("B 1234 ABC", db_path=self.db_path))
+
+    def test_list_vehicles_parking_status(self):
+        db_manager.upsert_vehicle("B 1000 MHS", "Mhs Satu", "Mahasiswa", db_path=self.db_path)
+        db_manager.upsert_vehicle("B 2000 DOS", "Dosen Satu", "Dosen", db_path=self.db_path)
+
+        # Status awal: keduanya di luar
+        v_list = db_manager.list_vehicles(db_path=self.db_path)
+        status_map = {v["plate"]: v for v in v_list}
+        self.assertFalse(status_map["B 1000 MHS"]["is_parked"])
+        self.assertEqual(status_map["B 1000 MHS"]["parking_status"], "⚪ Di Luar")
+        self.assertFalse(status_map["B 2000 DOS"]["is_parked"])
+
+        # Mhs Satu masuk (IN)
+        db_manager.save_transaction("B 1000 MHS", "Mhs Satu", "Mahasiswa", 2000, "Masuk", gate_direction="IN", db_path=self.db_path)
+        v_list2 = db_manager.list_vehicles(db_path=self.db_path)
+        status_map2 = {v["plate"]: v for v in v_list2}
+        self.assertTrue(status_map2["B 1000 MHS"]["is_parked"])
+        self.assertIn("🟢 Di Dalam", status_map2["B 1000 MHS"]["parking_status"])
+        self.assertFalse(status_map2["B 2000 DOS"]["is_parked"])
+
+    def test_get_currently_parked_vehicles_and_cleanup(self):
+        # Kendaraan 1 (Mahasiswa) masuk
+        db_manager.save_transaction("B 1111 MHS", "Agus", "Mahasiswa", 2000, "Masuk", gate_direction="IN", db_path=self.db_path)
+        # Kendaraan 2 (Tamu) masuk
+        db_manager.save_transaction("B 2222 TMU", "Tamu B", "Tamu", 3000, "Masuk", gate_direction="IN", db_path=self.db_path)
+        # Kendaraan 3 (Tamu C) masuk lalu keluar
+        db_manager.save_transaction("B 3333 OUT", "Tamu C", "Tamu", 3000, "Masuk", gate_direction="IN", db_path=self.db_path)
+        db_manager.save_transaction("B 3333 OUT", "Tamu C", "Tamu", 3000, "Keluar", gate_direction="OUT", duration_minutes=30, db_path=self.db_path)
+
+        # Cek kendaraan yang sedang parkir
+        active = db_manager.get_currently_parked_vehicles(db_path=self.db_path)
+        self.assertEqual(len(active), 2)
+        active_plates = [a["plate"] for a in active]
+        self.assertIn("B 1111 MHS", active_plates)
+        self.assertIn("B 2222 TMU", active_plates)
+        self.assertNotIn("B 3333 OUT", active_plates)
+
+        # Test delete single transaction
+        tx_to_del = active[0]["id"]
+        self.assertTrue(db_manager.delete_transaction(tx_to_del, db_path=self.db_path))
+
+        # Test delete completed transactions (hanya menghapus sesi yang sudah OUT)
+        # B 3333 OUT memiliki 2 transaksi (IN & OUT) yang sudah selesai
+        deleted_count = db_manager.delete_completed_transactions(db_path=self.db_path)
+        self.assertTrue(deleted_count >= 2)
+
+        # Test clear all transactions
+        cleared = db_manager.clear_all_transactions(db_path=self.db_path)
+        self.assertTrue(cleared >= 1)
+        self.assertEqual(len(db_manager.list_transactions(db_path=self.db_path)), 0)
+
 
 class TestDatasetValidator(unittest.TestCase):
     def test_validate_annotation_line(self):
