@@ -55,6 +55,9 @@ db_manager.init_db()
 # ==============================================================================
 # TEMA & GAYA VISUAL (MODERN CAMPUS DASHBOARD)
 # ==============================================================================
+# ==============================================================================
+# TEMA & GAYA VISUAL (MODERN CAMPUS DASHBOARD)
+# ==============================================================================
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
@@ -62,38 +65,131 @@ st.markdown("""
         font-family: 'Plus Jakarta Sans', sans-serif;
     }
     
-    /* Hero Header Compact */
+    /* Hero Header */
     .hero-container {
-        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%);
-        padding: 20px 26px;
-        border-radius: 14px;
+        background: linear-gradient(135deg, #091e42 0%, #172554 45%, #1d4ed8 100%);
+        padding: 22px 28px;
+        border-radius: 16px;
         color: white;
-        margin-bottom: 20px;
-        box-shadow: 0 8px 20px -4px rgba(37, 99, 235, 0.25);
+        margin-bottom: 18px;
+        box-shadow: 0 10px 25px -5px rgba(29, 78, 216, 0.28);
+        border: 1px solid rgba(255, 255, 255, 0.12);
     }
     .hero-title {
-        font-size: 1.65rem;
+        font-size: 1.7rem;
         font-weight: 800;
         margin: 0;
         color: #ffffff !important;
         letter-spacing: -0.5px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }
     .hero-subtitle {
-        font-size: 0.9rem;
+        font-size: 0.92rem;
         color: #bfdbfe !important;
         margin-top: 4px;
         margin-bottom: 0px;
         font-weight: 400;
     }
-    .badge-pipeline {
-        display: inline-block;
-        background: rgba(255, 255, 255, 0.15);
-        padding: 3px 10px;
+    .hero-chips {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+    }
+    .hero-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.14);
+        padding: 5px 12px;
         border-radius: 9999px;
-        font-size: 0.75rem;
+        font-size: 0.78rem;
         font-weight: 600;
-        margin-top: 8px;
-        color: #e0f2fe;
+        color: #eff6ff;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    /* Stepper Workflow Visual */
+    .stepper-box {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--secondary-background-color);
+        border: 1px solid rgba(128, 128, 128, 0.18);
+        border-radius: 14px;
+        padding: 12px 18px;
+        margin-bottom: 20px;
+        gap: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    }
+    .step-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex: 1;
+        padding: 8px 12px;
+        border-radius: 10px;
+        transition: all 0.2s ease;
+    }
+    .step-card.active {
+        background: rgba(37, 99, 235, 0.12);
+        border: 1.5px solid #2563eb;
+    }
+    .step-card.completed {
+        background: rgba(16, 185, 129, 0.12);
+        border: 1.5px solid #10b981;
+    }
+    .step-card.idle {
+        opacity: 0.55;
+        border: 1px solid transparent;
+    }
+    .step-num {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 0.92rem;
+        flex-shrink: 0;
+    }
+    .step-card.active .step-num {
+        background: #2563eb;
+        color: #ffffff;
+        box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
+    }
+    .step-card.completed .step-num {
+        background: #10b981;
+        color: #ffffff;
+    }
+    .step-card.idle .step-num {
+        background: rgba(128, 128, 128, 0.2);
+        color: inherit;
+    }
+    .step-meta {
+        display: flex;
+        flex-direction: column;
+    }
+    .step-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        color: #64748b;
+    }
+    .step-title {
+        font-size: 0.88rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+    .step-arrow {
+        color: #94a3b8;
+        font-weight: bold;
+        font-size: 1.1rem;
+        user-select: none;
     }
 
     /* Metric Cards */
@@ -109,55 +205,131 @@ st.markdown("""
         transform: translateY(-2px);
     }
 
-    /* Verification Result Card */
+    /* Ticket Card Luxury Modern */
     .ticket-card {
-        background-color: var(--secondary-background-color);
-        border: 2px solid rgba(37, 99, 235, 0.25);
-        border-radius: 14px;
+        background: var(--secondary-background-color);
+        border: 2px solid #2563eb;
+        border-radius: 16px;
         padding: 22px;
         margin-bottom: 16px;
-        box-shadow: 0 6px 16px rgba(0,0,0,0.06);
+        box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.15);
+        position: relative;
+        overflow: hidden;
     }
-    .plate-number-badge {
-        display: inline-block;
-        background: #0f172a;
-        color: #ffffff;
-        font-family: 'Courier New', Courier, monospace;
-        font-size: 1.8rem;
+    .ticket-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5px;
+        background: linear-gradient(90deg, #2563eb, #38bdf8, #10b981);
+    }
+    .ticket-card-invalid {
+        background: var(--secondary-background-color);
+        border: 2px solid #ef4444;
+        border-radius: 16px;
+        padding: 26px 20px;
+        text-align: center;
+        margin-bottom: 16px;
+        box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.15);
+    }
+    .empty-state-card {
+        background: var(--secondary-background-color);
+        border: 2px dashed rgba(128, 128, 128, 0.3);
+        border-radius: 16px;
+        padding: 36px 20px;
+        text-align: center;
+        margin-bottom: 16px;
+    }
+    .empty-title {
+        font-size: 1.15rem;
+        font-weight: 700;
+        margin-top: 8px;
+        margin-bottom: 4px;
+    }
+    .empty-sub {
+        font-size: 0.88rem;
+        color: #64748b;
+        max-width: 440px;
+        margin: 0 auto 16px auto;
+        line-height: 1.5;
+    }
+    .empty-pills {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    .pill-mini {
+        background: rgba(128, 128, 128, 0.12);
+        padding: 4px 10px;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    /* Authentic Indonesian License Plate */
+    .plate-badge-id {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+        color: #ffffff !important;
+        font-family: 'Courier New', 'Consolas', monospace;
+        font-size: 2.1rem;
         font-weight: 800;
-        padding: 6px 18px;
-        border-radius: 8px;
-        border: 2px solid #ffffff;
-        letter-spacing: 2px;
-        margin-bottom: 12px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        letter-spacing: 4px;
+        padding: 10px 24px;
+        border-radius: 10px;
+        border: 3px solid #334155;
+        box-shadow: inset 0 2px 4px rgba(255,255,255,0.15), 0 6px 16px rgba(0,0,0,0.35);
+        text-shadow: 0 2px 4px rgba(0,0,0,0.7);
+        margin: 8px 0 12px 0;
     }
 
     /* Badges Status */
     .badge-status {
         display: inline-block;
-        padding: 6px 14px;
-        border-radius: 8px;
+        padding: 7px 16px;
+        border-radius: 10px;
         font-weight: 700;
         font-size: 0.88rem;
+        letter-spacing: 0.2px;
     }
-    .status-dosen { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
-    .status-mhs { background: #e0f2fe; color: #075985; border: 1px solid #7dd3fc; }
-    .status-tamu { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
-    .status-invalid { background: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
-    .status-uncertain { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
+    .status-dosen { background: #dcfce7; color: #15803d; border: 1.5px solid #86efac; }
+    .status-mhs { background: #e0f2fe; color: #0369a1; border: 1.5px solid #7dd3fc; }
+    .status-tamu { background: #fef3c7; color: #b45309; border: 1.5px solid #fde68a; }
+    .status-invalid { background: #fee2e2; color: #b91c1c; border: 1.5px solid #fca5a5; }
+    .status-uncertain { background: #fef9c3; color: #a16207; border: 1.5px solid #fde047; }
 
-    /* Clean Buttons */
+    /* Action Buttons */
     div.stButton > button {
-        border-radius: 8px;
-        font-weight: 600;
+        border-radius: 10px;
+        font-weight: 700;
+        padding: 10px 18px;
+        transition: all 0.2s ease;
     }
 </style>
+""", unsafe_allow_html=True)
 
+# Hitung data kapasitas real-time untuk header & sidebar
+total_slots = 100
+parked_now = db_manager.get_currently_parked_count()
+available_slots = max(0, total_slots - parked_now)
+pct_used = min(1.0, parked_now / total_slots)
+is_model_available = os.path.isfile(DEFAULT_MODEL_PATH)
+
+st.markdown(f"""
 <div class="hero-container">
     <div class="hero-title">🅿️ SMART PARKING KAMPUS</div>
-    <div class="hero-subtitle">Sistem Otomasi Gerbang Parkir: Deteksi Plat Nomor (YOLO) + Pembacaan Karakter (EasyOCR) + Verifikasi Database Kampus</div>
-    <div class="badge-pipeline">⚡ Alur Resmi: Deteksi Plat ➔ OCR Karakter ➔ Pencocokan SQLite ➔ Konfirmasi Petugas</div>
+    <div class="hero-subtitle">Sistem Otomasi Gerbang: Deteksi Plat Nomor (YOLO) + Pembacaan Karakter (EasyOCR) + Verifikasi Database Kampus</div>
+    <div class="hero-chips">
+        <span class="hero-chip">🟢 Sisa Slot: <b>{available_slots} / {total_slots}</b></span>
+        <span class="hero-chip">🚗 Sedang Parkir: <b>{parked_now} Unit</b></span>
+        <span class="hero-chip">{'✅ Model YOLO Aktif' if is_model_available else '⚠️ Model Belum Terpasang'}</span>
+        <span class="hero-chip">⚡ Alur: Deteksi ➔ Verifikasi ➔ Buka Gerbang</span>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -177,7 +349,6 @@ with st.sidebar:
         help="Mode Otomatis akan mengecek database: jika kendaraan belum di dalam kampus maka otomatis MASUK, jika sudah di dalam maka otomatis KELUAR dan hitung durasi."
     )
 
-    is_model_available = os.path.isfile(DEFAULT_MODEL_PATH)
     if is_model_available:
         st.success("✅ Model YOLO Aktif")
     else:
@@ -185,11 +356,6 @@ with st.sidebar:
 
     st.divider()
     st.subheader("🅿️ Kapasitas Slot Parkir")
-    total_slots = 100
-    parked_now = db_manager.get_currently_parked_count()
-    available_slots = max(0, total_slots - parked_now)
-    pct_used = min(1.0, parked_now / total_slots)
-
     st.progress(pct_used)
     st.write(f"Terisi: **{parked_now}** / {total_slots} Kendaraan")
     if available_slots > 15:
@@ -245,9 +411,6 @@ def get_ocr_only():
 # TAB 1: POS GERBANG (PEMERIKSAAN & VERIFIKASI)
 # ==============================================================================
 with tab_gate:
-    st.subheader("Pemeriksaan Kendaraan di Pintu Masuk / Keluar")
-    st.caption("Pilih metode deteksi plat di bawah ini. Sistem akan otomatis memverifikasi hak parkir ke database kampus.")
-
     # State untuk menyimpan plat terakhir yang dideteksi
     if "current_plate" not in st.session_state:
         st.session_state["current_plate"] = None
@@ -256,179 +419,139 @@ with tab_gate:
     if "current_source" not in st.session_state:
         st.session_state["current_source"] = "Belum Ada"
 
-    col_input, col_verify = st.columns([1.1, 1.2])
+    active_plate = st.session_state.get("current_plate")
 
+    # Stepper Workflow Visual (Langkah 1 -> Langkah 2 -> Langkah 3)
+    if not active_plate:
+        s1_class = "active"
+        s2_class = "idle"
+        s3_class = "idle"
+        s1_icon = "📸"
+        s2_icon = "⏳"
+        s3_icon = "🚪"
+        s1_status = "Sedang Berlangsung"
+        s2_status = "Menunggu Plat"
+        s3_status = "Menunggu Verifikasi"
+    elif active_plate == "INVALID_PLATE":
+        s1_class = "active"
+        s2_class = "idle"
+        s3_class = "idle"
+        s1_icon = "❌"
+        s2_icon = "🚫"
+        s3_icon = "🔒"
+        s1_status = "Bukan Plat Kendaraan"
+        s2_status = "Verifikasi Ditolak"
+        s3_status = "Gerbang Terkunci"
+    else:
+        s1_class = "completed"
+        s2_class = "completed"
+        s3_class = "active"
+        s1_icon = "✅"
+        s2_icon = "✅"
+        s3_icon = "🔓"
+        s1_status = "Plat Terdeteksi"
+        s2_status = "Terverifikasi"
+        s3_status = "Siap Buka Gerbang"
+
+    st.markdown(f"""
+    <div class="stepper-box">
+        <div class="step-card {s1_class}">
+            <div class="step-num">{s1_icon}</div>
+            <div class="step-meta">
+                <span class="step-label">LANGKAH 1</span>
+                <span class="step-title">Pindai / Masukkan Plat</span>
+            </div>
+        </div>
+        <div class="step-arrow">➔</div>
+        <div class="step-card {s2_class}">
+            <div class="step-num">{s2_icon}</div>
+            <div class="step-meta">
+                <span class="step-label">LANGKAH 2</span>
+                <span class="step-title">Verifikasi Hak & Tarif</span>
+            </div>
+        </div>
+        <div class="step-arrow">➔</div>
+        <div class="step-card {s3_class}">
+            <div class="step-num">{s3_icon}</div>
+            <div class="step-meta">
+                <span class="step-label">LANGKAH 3</span>
+                <span class="step-title">Buka Palang Gerbang</span>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_input, col_verify = st.columns([1.1, 1.25], gap="medium")
+
+    # --------------------------------------------------------------------------
+    # KOLOM KIRI: LANGKAH 1 — INPUT & DETEKSI PLAT
+    # --------------------------------------------------------------------------
     with col_input:
+        st.markdown("#### 📸 Langkah 1: Pindai Plat Kendaraan")
+        
         mode_input = st.radio(
             "Pilih Metode Deteksi:",
-            ["📹 Kamera Langsung (Webcam)", "📁 Unggah Foto Kendaraan", "⌨️ Ketik Plat Manual"],
-            horizontal=True,
+            [
+                "⚡ Kamera Cepat (Snapshot 1-Klik)",
+                "📁 Unggah Foto Kendaraan",
+                "⌨️ Ketik Plat Manual",
+                "📹 Kamera Live (Streaming WebRTC)",
+            ],
+            horizontal=False,
+            label_visibility="collapsed",
         )
 
-        # MODE 1: KAMERA WEBCAM
-        if mode_input == "📹 Kamera Langsung (Webcam)":
+        # METODE 1: KAMERA SNAPSHOT (NATIVE BROWSER HTML5 - 60 FPS, 0% LAG)
+        if mode_input == "⚡ Kamera Cepat (Snapshot 1-Klik)":
             if not is_model_available:
                 st.warning("⚠️ File model YOLO belum ditemukan. Gunakan mode 'Unggah Foto' atau 'Ketik Manual'.")
             else:
-                sub_cam = st.radio(
-                    "Pilihan Tipe Kamera:",
-                    ["⚡ Kamera Cepat (Snapshot Browser — Ringan & Anti Lag)", "📹 Kamera Streaming (WebRTC Real-Time)"],
-                    horizontal=True,
-                )
+                st.info("💡 **Arahkan kamera ke plat kendaraan**, lalu klik tombol ambil foto di bawah. Sangat cepat, tajam, dan anti-lag!")
+                cam_shot = st.camera_input("Arahkan kamera ke plat nomor kendaraan:", key="native_cam_input")
+                if cam_shot is not None:
+                    file_bytes = np.asarray(bytearray(cam_shot.read()), dtype=np.uint8)
+                    img_cv = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
-                # OPSI A: KAMERA CEPAT (NATIVE BROWSER HTML5 - 0% LAG)
-                if "Snapshot" in sub_cam:
-                    st.caption("💡 *Kamera browser langsung: sangat halus (60 FPS), tidak membebani CPU laptop, dan hasil foto sangat tajam.*")
-                    cam_shot = st.camera_input("Arahkan kamera ke plat nomor kendaraan:", key="native_cam_input")
-                    if cam_shot is not None:
-                        file_bytes = np.asarray(bytearray(cam_shot.read()), dtype=np.uint8)
-                        img_cv = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-
-                        with st.spinner("AI sedang membaca plat nomor dari foto..."):
-                            from ocr_engine import extract_plate_text
-                            model, reader = get_yolo_and_ocr(DEFAULT_MODEL_PATH)
-                            preds = model.predict(source=img_cv, conf=conf_threshold, verbose=False, imgsz=640)
-                            found = []
-                            for p in preds:
-                                for b in p.boxes:
-                                    x1, y1, x2, y2 = map(int, b.xyxy[0].tolist())
-                                    crop = img_cv[max(0, y1):min(img_cv.shape[0], y2), max(0, x1):min(img_cv.shape[1], x2)]
-                                    if crop.size > 0:
-                                        t, c, _ = extract_plate_text(reader, crop)
-                                        if t:
-                                            cleaned = disambiguate_plate(t)
-                                            if is_valid_plate_pattern(cleaned):
-                                                found.append((cleaned, c))
-
-                            if found:
-                                best_t, best_c = max(found, key=lambda x: x[1])
-                                st.session_state["current_plate"] = best_t
-                                st.session_state["current_conf"] = best_c
-                                st.session_state["current_source"] = "Kamera Browser"
-                                st.toast(f"Plat terdeteksi: {best_t}", icon="✅")
-                                st.rerun()
-                            else:
-                                total_boxes = sum(len(p.boxes) for p in preds) if preds else 0
-                                if total_boxes == 0:
-                                    st.error("❌ Tidak ada plat nomor kendaraan yang terdeteksi. AI mendeteksi ini bukan kendaraan (wajah / pakaian / benda acak).")
-                                else:
-                                    st.warning("⚠️ Kotak plat terdeteksi namun karakter tidak terbaca sebagai format plat nomor Indonesia yang sah.")
-
-                # OPSI B: KAMERA STREAMING WEBRTC (OPTIMIZED 30 FPS)
-                else:
-                    try:
-                        from streamlit_webrtc import webrtc_streamer, WebRtcMode, VideoProcessorBase
+                    with st.spinner("AI sedang membaca plat nomor dari foto..."):
                         from ocr_engine import extract_plate_text
                         model, reader = get_yolo_and_ocr(DEFAULT_MODEL_PATH)
+                        preds = model.predict(source=img_cv, conf=conf_threshold, verbose=False, imgsz=640)
+                        found = []
+                        for p in preds:
+                            for b in p.boxes:
+                                x1, y1, x2, y2 = map(int, b.xyxy[0].tolist())
+                                crop = img_cv[max(0, y1):min(img_cv.shape[0], y2), max(0, x1):min(img_cv.shape[1], x2)]
+                                if crop.size > 0:
+                                    t, c, _ = extract_plate_text(reader, crop)
+                                    if t:
+                                        cleaned = disambiguate_plate(t)
+                                        if is_valid_plate_pattern(cleaned):
+                                            found.append((cleaned, c))
 
-                        class LiveCameraProcessor(VideoProcessorBase):
-                            def __init__(self):
-                                self.lock = threading.Lock()
-                                self.latest_frame = None
-                                self.frame_count = 0
-                                self.box = None
+                        if found:
+                            best_t, best_c = max(found, key=lambda x: x[1])
+                            st.session_state["current_plate"] = best_t
+                            st.session_state["current_conf"] = best_c
+                            st.session_state["current_source"] = "Kamera Cepat"
+                            st.toast(f"Plat terdeteksi: {best_t}", icon="✅")
+                            st.rerun()
+                        else:
+                            total_boxes = sum(len(p.boxes) for p in preds) if preds else 0
+                            if total_boxes == 0:
+                                st.session_state["current_plate"] = "INVALID_PLATE"
+                                st.session_state["current_conf"] = 0.0
+                                st.session_state["current_source"] = "Bukan Kendaraan"
+                                st.rerun()
+                            else:
+                                st.warning("⚠️ Kotak plat terdeteksi namun karakter tidak terbaca sebagai format plat nomor Indonesia yang sah.")
 
-                            def recv(self, frame):
-                                img = frame.to_ndarray(format="bgr24")
-                                self.frame_count += 1
-                                h, w = img.shape[:2]
-
-                                # Simpan frame asli untuk di-scan saat tombol ditekan
-                                with self.lock:
-                                    self.latest_frame = img.copy()
-
-                                # Deteksi kotak plat dengan YOLO tiap N frame (Hanya YOLO ringan, TANPA EasyOCR di stream agar tidak lag)
-                                if self.frame_count % frame_skip == 0:
-                                    try:
-                                        preds = model.predict(source=img, conf=conf_threshold, verbose=False, imgsz=320)
-                                        found_box = None
-                                        for p in preds:
-                                            for b in p.boxes:
-                                                found_box = list(map(int, b.xyxy[0].tolist()))
-                                                break
-                                            if found_box:
-                                                break
-                                        with self.lock:
-                                            self.box = found_box
-                                    except Exception:
-                                        pass
-
-                                # Tampilkan visual feedback ke layar
-                                with self.lock:
-                                    cur_box = self.box
-
-                                if cur_box:
-                                    x1, y1, x2, y2 = cur_box
-                                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 230, 0), 2)
-                                    cv2.putText(img, "PLAT TERDETEKSI", (x1, max(20, y1 - 8)),
-                                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 230, 0), 2)
-                                else:
-                                    # Kotak panduan (viewfinder) di tengah
-                                    cx, cy = w // 2, h // 2
-                                    bx1, by1 = cx - 150, cy - 50
-                                    bx2, by2 = cx + 150, cy + 50
-                                    cv2.rectangle(img, (bx1, by1), (bx2, by2), (0, 180, 255), 1, cv2.LINE_AA)
-                                    cv2.putText(img, "Arahkan Plat ke Sini", (bx1 + 10, by1 - 8),
-                                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 180, 255), 1)
-
-                                return type(frame).from_ndarray(img, format="bgr24")
-
-                        st.write("Arahkan kamera ke plat kendaraan:")
-                        ctx = webrtc_streamer(
-                            key="gate-camera-stream",
-                            mode=WebRtcMode.SENDRECV,
-                            video_processor_factory=LiveCameraProcessor,
-                            media_stream_constraints={
-                                "video": {"width": {"ideal": 640}, "height": {"ideal": 480}, "frameRate": {"ideal": 30}},
-                                "audio": False
-                            },
-                            async_processing=True,
-                        )
-
-                        btn_scan = st.button("📸 SCAN / AMBIL PLAT SEKARANG", type="primary", use_container_width=True)
-                        if btn_scan and ctx.video_processor:
-                            with ctx.video_processor.lock:
-                                snap = ctx.video_processor.latest_frame
-                            if snap is not None:
-                                with st.spinner("AI sedang memeriksa plat nomor kendaraan..."):
-                                    from ocr_engine import extract_plate_text
-                                    preds = model.predict(source=snap, conf=conf_threshold, verbose=False, imgsz=640)
-                                    found = []
-                                    for p in preds:
-                                        for b in p.boxes:
-                                            x1, y1, x2, y2 = map(int, b.xyxy[0].tolist())
-                                            crop = snap[max(0, y1):min(snap.shape[0], y2), max(0, x1):min(snap.shape[1], x2)]
-                                            if crop.size > 0:
-                                                t, c, _ = extract_plate_text(reader, crop)
-                                                if t:
-                                                    cleaned = disambiguate_plate(t)
-                                                    if is_valid_plate_pattern(cleaned):
-                                                        found.append((cleaned, c))
-
-                                    if found:
-                                        best_t, best_c = max(found, key=lambda x: x[1])
-                                        st.session_state["current_plate"] = best_t
-                                        st.session_state["current_conf"] = best_c
-                                        st.session_state["current_source"] = "Kamera Streaming"
-                                        st.toast(f"Plat terdeteksi: {best_t}", icon="✅")
-                                        st.rerun()
-                                    else:
-                                        total_boxes = sum(len(p.boxes) for p in preds) if preds else 0
-                                        if total_boxes == 0:
-                                            st.error("❌ Tidak ada plat nomor kendaraan yang terdeteksi. AI mendeteksi ini bukan kendaraan (wajah / pakaian / benda acak).")
-                                        else:
-                                            st.warning("⚠️ Kotak terdeteksi namun karakter tidak terbaca sebagai format plat nomor Indonesia yang sah.")
-                    except Exception as e:
-                        st.error(f"Gagal mengaktifkan kamera streaming: {e}")
-
-        # MODE 2: UNGGAH FOTO
+        # METODE 2: UNGGAH FOTO
         elif mode_input == "📁 Unggah Foto Kendaraan":
-            st.write("Unggah foto motor atau mobil (kamera depan/belakang):")
+            st.info("💡 Unggah foto bagian depan / belakang mobil atau motor:")
             uploaded_file = st.file_uploader("Pilih file foto (JPG/PNG)", type=["jpg", "jpeg", "png"], key="gate_photo_upload")
             if uploaded_file is not None:
                 file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
                 img_cv = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-
                 st.image(cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB), caption="Foto Kendaraan", use_container_width=True)
 
                 if st.button("🔍 Deteksi & Baca Plat Nomor", type="primary", use_container_width=True):
@@ -457,11 +580,14 @@ with tab_gate:
                             st.toast(f"Plat terdeteksi: {best_t}", icon="✅")
                             st.rerun()
                         else:
-                            st.error("❌ Tidak dapat menemukan plat nomor kendaraan pada gambar ini. Pastikan foto memuat plat kendaraan bermotor (bukan wajah/benda acak).")
+                            st.session_state["current_plate"] = "INVALID_PLATE"
+                            st.session_state["current_conf"] = 0.0
+                            st.session_state["current_source"] = "Bukan Kendaraan"
+                            st.rerun()
 
-        # MODE 3: KETIK MANUAL
-        else:
-            st.write("Gunakan jika plat nomor kotor/rusak dan tidak terbaca oleh AI:")
+        # METODE 3: KETIK MANUAL
+        elif mode_input == "⌨️ Ketik Plat Manual":
+            st.info("💡 Gunakan jika plat nomor kotor/rusak dan tidak terbaca oleh AI:")
             manual_in = st.text_input("Ketik Nomor Plat Kendaraan", placeholder="Contoh: B 6802 JPN / F 4526 FCF")
             if st.button("🔎 Periksa Nomor Plat", type="primary", use_container_width=True):
                 cleaned_man = disambiguate_plate(manual_in.strip())
@@ -475,19 +601,152 @@ with tab_gate:
                     st.session_state["current_source"] = "Input Manual"
                     st.rerun()
 
-    # PANEL KANAN: KARTU HASIL VERIFIKASI & KONFIRMASI PETUGAS
-    with col_verify:
-        st.markdown("#### 🎫 Hasil Verifikasi & Tiket Gerbang")
+        # METODE 4: KAMERA STREAMING WEBRTC
+        else:
+            try:
+                from streamlit_webrtc import webrtc_streamer, WebRtcMode, VideoProcessorBase
+                from ocr_engine import extract_plate_text
+                model, reader = get_yolo_and_ocr(DEFAULT_MODEL_PATH)
 
-        active_plate = st.session_state.get("current_plate")
+                class LiveCameraProcessor(VideoProcessorBase):
+                    def __init__(self):
+                        self.lock = threading.Lock()
+                        self.latest_frame = None
+                        self.frame_count = 0
+                        self.box = None
+
+                    def recv(self, frame):
+                        img = frame.to_ndarray(format="bgr24")
+                        self.frame_count += 1
+                        h, w = img.shape[:2]
+
+                        with self.lock:
+                            self.latest_frame = img.copy()
+
+                        if self.frame_count % frame_skip == 0:
+                            try:
+                                preds = model.predict(source=img, conf=conf_threshold, verbose=False, imgsz=320)
+                                found_box = None
+                                for p in preds:
+                                    for b in p.boxes:
+                                        found_box = list(map(int, b.xyxy[0].tolist()))
+                                        break
+                                    if found_box:
+                                        break
+                                with self.lock:
+                                    self.box = found_box
+                            except Exception:
+                                pass
+
+                        with self.lock:
+                            cur_box = self.box
+
+                        if cur_box:
+                            x1, y1, x2, y2 = cur_box
+                            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 230, 0), 2)
+                            cv2.putText(img, "PLAT TERDETEKSI", (x1, max(20, y1 - 8)),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 230, 0), 2)
+                        else:
+                            cx, cy = w // 2, h // 2
+                            bx1, by1 = cx - 150, cy - 50
+                            bx2, by2 = cx + 150, cy + 50
+                            cv2.rectangle(img, (bx1, by1), (bx2, by2), (0, 180, 255), 1, cv2.LINE_AA)
+                            cv2.putText(img, "Arahkan Plat ke Sini", (bx1 + 10, by1 - 8),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 180, 255), 1)
+
+                        return type(frame).from_ndarray(img, format="bgr24")
+
+                st.write("Arahkan kamera ke plat kendaraan:")
+                ctx = webrtc_streamer(
+                    key="gate-camera-stream",
+                    mode=WebRtcMode.SENDRECV,
+                    video_processor_factory=LiveCameraProcessor,
+                    media_stream_constraints={
+                        "video": {"width": {"ideal": 640}, "height": {"ideal": 480}, "frameRate": {"ideal": 30}},
+                        "audio": False
+                    },
+                    async_processing=True,
+                )
+
+                btn_scan = st.button("📸 SCAN / AMBIL PLAT SEKARANG", type="primary", use_container_width=True)
+                if btn_scan and ctx.video_processor:
+                    with ctx.video_processor.lock:
+                        snap = ctx.video_processor.latest_frame
+                    if snap is not None:
+                        with st.spinner("AI sedang memeriksa plat nomor kendaraan..."):
+                            preds = model.predict(source=snap, conf=conf_threshold, verbose=False, imgsz=640)
+                            found = []
+                            for p in preds:
+                                for b in p.boxes:
+                                    x1, y1, x2, y2 = map(int, b.xyxy[0].tolist())
+                                    crop = snap[max(0, y1):min(snap.shape[0], y2), max(0, x1):min(snap.shape[1], x2)]
+                                    if crop.size > 0:
+                                        t, c, _ = extract_plate_text(reader, crop)
+                                        if t:
+                                            cleaned = disambiguate_plate(t)
+                                            if is_valid_plate_pattern(cleaned):
+                                                found.append((cleaned, c))
+
+                            if found:
+                                best_t, best_c = max(found, key=lambda x: x[1])
+                                st.session_state["current_plate"] = best_t
+                                st.session_state["current_conf"] = best_c
+                                st.session_state["current_source"] = "Kamera Streaming"
+                                st.toast(f"Plat terdeteksi: {best_t}", icon="✅")
+                                st.rerun()
+                            else:
+                                st.session_state["current_plate"] = "INVALID_PLATE"
+                                st.session_state["current_conf"] = 0.0
+                                st.session_state["current_source"] = "Bukan Kendaraan"
+                                st.rerun()
+            except Exception as e:
+                st.error(f"Gagal mengaktifkan kamera streaming: {e}")
+
+    # --------------------------------------------------------------------------
+    # KOLOM KANAN: LANGKAH 2 & 3 — HASIL VERIFIKASI & AKSI GERBANG
+    # --------------------------------------------------------------------------
+    with col_verify:
+        st.markdown("#### 🎫 Langkah 2 & 3: Verifikasi & Aksi Gerbang")
 
         if not active_plate:
-            st.info("👋 Silakan scan kamera, upload foto, atau ketik plat di sebelah kiri untuk memulai pemeriksaan.")
+            # EMPTY STATE (MENUNGGU PEMERIKSAAN)
+            st.markdown(f"""
+            <div class="empty-state-card">
+                <div style="font-size: 2.8rem; margin-bottom: 6px;">🚗 🔍</div>
+                <div class="empty-title">Menunggu Kendaraan di Pos Gerbang</div>
+                <div class="empty-sub">
+                    Gunakan kamera snapshot 1-klik, unggah foto, atau ketik plat di sebelah kiri.<br>
+                    Sistem AI akan otomatis membaca plat nomor, memverifikasi status kampus, dan menentukan tarif parkir.
+                </div>
+                <div class="empty-pills">
+                    <span class="pill-mini">🤖 Verifikasi Database Otomatis</span>
+                    <span class="pill-mini">🎓 Dosen: Rp0</span>
+                    <span class="pill-mini">🎒 Mahasiswa: Rp2.000</span>
+                    <span class="pill-mini">🏷️ Tamu: Rp5.000</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        elif active_plate == "INVALID_PLATE":
+            # REJECTION STATE (BUKAN KENDARAAN)
+            st.markdown("""
+            <div class="ticket-card-invalid">
+                <div style="font-size: 2.5rem; margin-bottom: 6px;">🚫</div>
+                <div style="font-size: 1.25rem; font-weight: 800; color: #dc2626;">BUKAN PLAT KENDARAAN</div>
+                <div style="font-size: 0.92rem; color: #64748b; margin-top: 6px; line-height: 1.5;">
+                    AI mendeteksi objek ini <b>bukan plat nomor kendaraan yang sah</b> (wajah, pakaian, teks acak, atau benda lain).<br>
+                    Palang gerbang <b>tetap terkunci</b> demi keamanan kampus.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("🔄 Pindai Ulang Kendaraan", type="secondary", use_container_width=True):
+                st.session_state["current_plate"] = None
+                st.rerun()
+
         else:
+            # TICKET STATE (PLAT VALID)
             cleaned_plat = disambiguate_plate(active_plate)
             vehicle_record = db_manager.find_vehicle(cleaned_plat)
-            
-            # Cek status parkir aktif saat ini di database
             active_entry = db_manager.get_active_entry(cleaned_plat)
 
             # Tentukan arah gerbang secara cerdas
@@ -516,22 +775,19 @@ with tab_gate:
             )
 
             # Tentukan warna badge status
-            if dec_result["status_code"] == "INVALID_PLATE":
-                badge_style = "status-invalid"
-                status_title = "❌ BUKAN PLAT KENDARAAN (OBJEK TIDAK VALID)"
+            if dec_result["status_code"] == "REGISTERED":
+                if dec_result["category"] == "Dosen":
+                    badge_style = "status-dosen"
+                    status_title = "🎓 DOSEN TERDAFTAR — PARKIR GRATIS"
+                else:
+                    badge_style = "status-mhs"
+                    status_title = f"🎒 {dec_result['category'].upper()} TERDAFTAR — WAJIB BAYAR"
             elif dec_result["status_code"] == "OCR_UNCERTAIN":
                 badge_style = "status-uncertain"
                 status_title = "⚠️ TEKS BURAM / OCR KURANG YAKIN"
-            elif dec_result["status_code"] == "REGISTERED":
-                if dec_result["category"] == "Dosen":
-                    badge_style = "status-dosen"
-                    status_title = "DOSEN TERDAFTAR — PARKIR GRATIS"
-                else:
-                    badge_style = "status-mhs"
-                    status_title = f"{dec_result['category'].upper()} TERDAFTAR — WAJIB BAYAR"
             else:
                 badge_style = "status-tamu"
-                status_title = "KENDARAAN TAMU (LUAR KAMPUS) — WAJIB BAYAR"
+                status_title = "🏷️ KENDARAAN TAMU (LUAR KAMPUS) — WAJIB BAYAR"
 
             # Info durasi & waktu parkir
             if gate_code == "OUT":
@@ -549,86 +805,101 @@ with tab_gate:
                     f"<div>🕒 <b>Waktu Masuk:</b><br><span style='font-size:0.92rem; color:#475569;'>{now_str}</span></div>"
                 )
 
-            # Tiket Verifikasi Digital
-            card_html = (
-                f'<div class="ticket-card">'
-                f'<div style="display:flex; justify-content:space-between; align-items:flex-start;">'
-                f'<div>'
-                f'<div style="font-size:0.8rem; color:gray; font-weight:600; text-transform:uppercase;">Plat Nomor Terbaca</div>'
-                f'<div class="plate-number-badge">{format_plate_display(cleaned_plat)}</div>'
-                f'<div style="font-size:0.85rem; color:gray;">Sumber: <b>{st.session_state.get("current_source")}</b> (OCR Conf: {st.session_state.get("current_conf", 1.0):.0%})</div>'
-                f'</div>'
-                f'<div>'
-                f'<span class="badge-status {badge_style}">{status_title}</span>'
-                f'</div>'
-                f'</div>'
-                f'<hr style="margin: 16px 0; border: none; border-top: 1px solid rgba(128,128,128,0.2);" />'
-                f'<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 0.95rem;">'
-                f'<div>👤 <b>Nama Pemilik:</b><br><span style="font-size:1.1rem; font-weight:700;">{dec_result.get("owner_name") or "Tidak Valid"}</span></div>'
-                f'<div>🏷️ <b>Kategori:</b><br><span style="font-size:1.1rem; font-weight:700;">{dec_result.get("category")}</span></div>'
-                f'<div>💵 <b>Tarif Parkir:</b><br><span style="font-size:1.4rem; font-weight:800; color:#2563eb;">{rupiah(dec_result.get("fee"))}</span></div>'
-                f'<div>🚪 <b>Status Gerbang:</b><br><span style="font-size:1.05rem; font-weight:700;">{gate_status_label}</span></div>'
-                f'{extra_gate_info}'
-                f'</div>'
-                f'</div>'
-            )
+            # Kartu Tiket Digital Modern
+            card_html = f"""
+            <div class="ticket-card">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+                    <div>
+                        <div style="font-size:0.75rem; color:#64748b; font-weight:700; letter-spacing:0.5px; text-transform:uppercase;">Plat Nomor Terbaca:</div>
+                        <div class="plate-badge-id">{format_plate_display(cleaned_plat)}</div>
+                        <div style="font-size:0.82rem; color:#64748b;">Sumber: <b>{st.session_state.get('current_source')}</b> (OCR Conf: {st.session_state.get('current_conf', 1.0):.0%})</div>
+                    </div>
+                    <div>
+                        <span class="badge-status {badge_style}">{status_title}</span>
+                    </div>
+                </div>
+                <hr style="margin: 16px 0; border: none; border-top: 1px solid rgba(128,128,128,0.2);" />
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 0.95rem;">
+                    <div>👤 <b>Nama Pemilik:</b><br><span style="font-size:1.1rem; font-weight:700;">{dec_result.get('owner_name') or 'Tidak Valid'}</span></div>
+                    <div>🏷️ <b>Kategori Civitas:</b><br><span style="font-size:1.1rem; font-weight:700;">{dec_result.get('category')}</span></div>
+                    <div>💵 <b>Total Biaya Parkir:</b><br><span style="font-size:1.45rem; font-weight:800; color:#2563eb;">{rupiah(dec_result.get('fee'))}</span></div>
+                    <div>🚪 <b>Aksi Gerbang:</b><br><span style="font-size:1.02rem; font-weight:700;">{gate_status_label}</span></div>
+                    {extra_gate_info}
+                </div>
+            </div>
+            """
             st.markdown(card_html, unsafe_allow_html=True)
 
-            if dec_result["status_code"] == "INVALID_PLATE":
-                st.error("🚫 **Objek Tidak Sah:** AI mendeteksi bahwa objek ini bukan plat nomor kendaraan bermotor yang sah (wajah, pakaian, atau teks acak). Gerbang tidak dapat dibuka.")
-                if st.button("🔄 Reset / Periksa Ulang", type="secondary", use_container_width=True):
-                    st.session_state["current_plate"] = None
-                    st.rerun()
-            else:
-                # Cek Peringatan Duplikasi
-                recent = db_manager.check_recent_transaction(cleaned_plat, cooldown_seconds=cooldown_sec, gate_direction=gate_code)
-                if recent:
-                    st.warning(f"⚠️ Peringatan: Kendaraan {format_plate_display(cleaned_plat)} sudah tercatat pada {recent['created_at']} (arah {gate_code}).")
+            # Cek Peringatan Duplikasi Transaksi
+            recent = db_manager.check_recent_transaction(cleaned_plat, cooldown_seconds=cooldown_sec, gate_direction=gate_code)
+            if recent:
+                st.warning(f"⚠️ Peringatan: Kendaraan {format_plate_display(cleaned_plat)} sudah tercatat pada {recent['created_at']} (arah {gate_code}).")
 
-                # Form Konfirmasi Petugas
-                with st.form("form_konfirmasi_gerbang"):
-                    koreksi_plat = st.text_input("Koreksi Plat Nomor (Jika Salah Baca)", value=format_plate_display(cleaned_plat))
-                    catatan_petugas = st.text_input("Catatan Petugas (Opsional)", placeholder="Contoh: Mengantar dokumen ke Rektorat")
-                    
-                    btn_label = "🚪 Buka Gerbang Masuk (Simpan Transaksi)" if gate_code == "IN" else "🚪 Buka Gerbang Keluar & Selesai Parkir"
-                    btn_simpan_tx = st.form_submit_button(btn_label, type="primary", use_container_width=True)
+            # Expander Opsional untuk Koreksi Plat & Catatan Petugas (Hanya jika diperlukan)
+            with st.expander("✏️ Koreksi Plat / Catatan Tambahan (Klik jika plat salah baca)", expanded=False):
+                st.caption("Ubah plat di bawah ini hanya jika AI salah membaca karakter plat nomor:")
+                koreksi_plat = st.text_input("Koreksi Plat Nomor", value=format_plate_display(cleaned_plat), key="input_koreksi_plat")
+                catatan_petugas = st.text_input("Catatan Petugas (Opsional)", placeholder="Contoh: Mengantar dokumen ke Rektorat", key="input_catatan_petugas")
+                if st.button("Terapkan Koreksi Plat", type="secondary"):
+                    if koreksi_plat.strip():
+                        st.session_state["current_plate"] = koreksi_plat.strip()
+                        st.session_state["current_source"] = "Koreksi Manual"
+                        st.rerun()
 
-                if btn_simpan_tx:
-                    final_p = koreksi_plat.strip() if koreksi_plat.strip() else cleaned_plat
-                    rec = db_manager.find_vehicle(final_p)
-                    active_ent = db_manager.get_active_entry(final_p)
-                    
-                    if "Otomatis" in gate_dir_mode:
-                        final_gate_code = "OUT" if active_ent else "IN"
-                    elif "IN" in gate_dir_mode:
-                        final_gate_code = "IN"
-                    else:
-                        final_gate_code = "OUT"
+            # LANGKAH 3: TOMBOL UTAMA BUKA GERBANG (1-KLIK LANGSUNG JALAN)
+            btn_col1, btn_col2 = st.columns([3, 1])
+            with btn_col1:
+                if gate_code == "IN":
+                    btn_open = st.button("🟢 BUKA GERBANG MASUK & CATAT TRANSAKSI", type="primary", use_container_width=True)
+                else:
+                    fee_txt = rupiah(dec_result.get("fee", 0))
+                    btn_open = st.button(f"🔴 BUKA GERBANG KELUAR & SELESAI PARKIR ({fee_txt})", type="primary", use_container_width=True)
 
-                    final_dec = decide(
-                        final_p,
-                        confidence=1.0,
-                        vehicle_data=rec,
-                        min_conf=ocr_min_conf,
-                        gate_direction=final_gate_code,
-                        entry_record=active_ent if final_gate_code == "OUT" else None,
-                    )
+            with btn_col2:
+                btn_cancel = st.button("🔄 Periksa Lain", type="secondary", use_container_width=True)
 
-                    tx_id = db_manager.save_transaction(
-                        plate=final_p,
-                        owner_name=final_dec.get("owner_name"),
-                        category=final_dec.get("category"),
-                        fee=final_dec.get("fee"),
-                        decision=final_dec.get("decision"),
-                        status="CONFIRMED",
-                        gate_direction=final_gate_code,
-                        notes=catatan_petugas,
-                        duration_minutes=final_dec.get("duration_minutes", 0),
-                        entry_time=final_dec.get("entry_time"),
-                    )
-                    st.success(f"🎉 Transaksi #{tx_id} berhasil dicatat! Gerbang {final_gate_code} Terbuka.")
-                    st.session_state["current_plate"] = None
-                    st.rerun()
+            if btn_cancel:
+                st.session_state["current_plate"] = None
+                st.rerun()
+
+            if btn_open:
+                final_p = cleaned_plat
+                rec = db_manager.find_vehicle(final_p)
+                active_ent = db_manager.get_active_entry(final_p)
+
+                if "Otomatis" in gate_dir_mode:
+                    final_gate_code = "OUT" if active_ent else "IN"
+                elif "IN" in gate_dir_mode:
+                    final_gate_code = "IN"
+                else:
+                    final_gate_code = "OUT"
+
+                final_dec = decide(
+                    final_p,
+                    confidence=1.0,
+                    vehicle_data=rec,
+                    min_conf=ocr_min_conf,
+                    gate_direction=final_gate_code,
+                    entry_record=active_ent if final_gate_code == "OUT" else None,
+                )
+
+                catatan_val = st.session_state.get("input_catatan_petugas", "")
+
+                tx_id = db_manager.save_transaction(
+                    plate=final_p,
+                    owner_name=final_dec.get("owner_name"),
+                    category=final_dec.get("category"),
+                    fee=final_dec.get("fee"),
+                    decision=final_dec.get("decision"),
+                    status="CONFIRMED",
+                    gate_direction=final_gate_code,
+                    notes=catatan_val,
+                    duration_minutes=final_dec.get("duration_minutes", 0),
+                    entry_time=final_dec.get("entry_time"),
+                )
+                st.success(f"🎉 Gerbang {final_gate_code} Terbuka! Transaksi #{tx_id} ({final_p}) berhasil dicatat.")
+                st.session_state["current_plate"] = None
+                st.rerun()
 
 # ==============================================================================
 # TAB 2: DATA KENDARAAN KAMPUS (ADMIN DATABASE)
