@@ -16,14 +16,22 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
             "camera": True,
         }
 
-    # Helper status boolean to class & label
     yolo_active = status.get("yolo", True)
     ocr_active = status.get("ocr", True)
     db_active = status.get("database", True)
     cam_active = status.get("camera", True)
 
-    html_code = f"""
-<style>
+    yolo_dot = "active" if yolo_active else "inactive"
+    ocr_dot = "active" if ocr_active else "inactive"
+    db_dot = "active" if db_active else "inactive"
+    cam_dot = "active" if cam_active else "inactive"
+
+    yolo_txt = "Aktif & Siap" if yolo_active else "Nonaktif"
+    ocr_txt = "Siap Deteksi" if ocr_active else "Nonaktif"
+    db_txt = "Terhubung" if db_active else "Terputus"
+    cam_txt = "Online / Standby" if cam_active else "Offline"
+
+    html_code = f"""<style>
 /* ==============================================================================
    PANDUAN & STATUS AI - DESIGN SYSTEM (DARK THEME)
    ============================================================================== */
@@ -50,9 +58,7 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
     padding: 4px 0 24px 0;
 }}
 
-/* ------------------------------------------------------------------------------
-   1. PANEL STATUS SISTEM AI (PULSING INDICATORS)
-   ------------------------------------------------------------------------------ */
+/* 1. PANEL STATUS SISTEM AI (PULSING INDICATORS) */
 .ai-status-panel {{
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -68,12 +74,12 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
     display: flex;
     align-items: center;
     gap: 12px;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }}
 
 .status-chip-card:hover {{
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.16);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.18);
     border-color: rgba(37, 99, 235, 0.4);
 }}
 
@@ -126,9 +132,7 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
     font-weight: 600;
 }}
 
-/* ------------------------------------------------------------------------------
-   2. HERO BANNER
-   ------------------------------------------------------------------------------ */
+/* 2. HERO BANNER */
 .guide-hero {{
     background: linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 50%, #2563EB 100%);
     border-radius: 16px;
@@ -175,9 +179,7 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
     letter-spacing: 0.02em;
 }}
 
-/* ------------------------------------------------------------------------------
-   3. PIPELINE TIMELINE VERTIKAL 7 TAHAP
-   ------------------------------------------------------------------------------ */
+/* 3. PIPELINE TIMELINE VERTIKAL 7 TAHAP */
 .section-heading {{
     display: flex;
     align-items: center;
@@ -292,9 +294,7 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
     margin: 0;
 }}
 
-/* ------------------------------------------------------------------------------
-   4. CONTOH KOREKSI OCR (DISAMBIGUASI)
-   ------------------------------------------------------------------------------ */
+/* 4. CONTOH KOREKSI OCR (DISAMBIGUASI) */
 .ocr-demo-grid {{
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -397,9 +397,7 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
     line-height: 1.4;
 }}
 
-/* ------------------------------------------------------------------------------
-   5. KARTU TARIF SIVITAS & TAMU
-   ------------------------------------------------------------------------------ */
+/* 5. KARTU TARIF SIVITAS & TAMU */
 .tariff-grid {{
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -509,9 +507,7 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
     margin: 0;
 }}
 
-/* ------------------------------------------------------------------------------
-   6. TABEL TECH STACK SISTEM
-   ------------------------------------------------------------------------------ */
+/* 6. TABEL TECH STACK SISTEM */
 .table-card {{
     background: var(--guide-card-bg);
     border: 1px solid var(--guide-card-border);
@@ -570,9 +566,7 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
     font-weight: 700;
 }}
 
-/* ------------------------------------------------------------------------------
-   RESPONSIVE & ACCESSIBILITY
-   ------------------------------------------------------------------------------ */
+/* RESPONSIVE & ACCESSIBILITY */
 @media (max-width: 768px) {{
     .ai-status-panel {{
         grid-template-columns: repeat(2, 1fr);
@@ -622,344 +616,346 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
 
 <div class="guide-wrapper">
 
-    <!-- 1. PANEL STATUS SISTEM AI -->
-    <div class="ai-status-panel">
-        <div class="status-chip-card">
-            <span class="status-dot {'active' if yolo_active else 'inactive'}"></span>
-            <div class="status-text-group">
-                <span class="status-title">Model YOLOv8</span>
-                <span class="status-meta">{'Aktif & Siap' if yolo_active else 'Nonaktif'}</span>
-            </div>
-        </div>
-        <div class="status-chip-card">
-            <span class="status-dot {'active' if ocr_active else 'inactive'}"></span>
-            <div class="status-text-group">
-                <span class="status-title">EasyOCR Engine</span>
-                <span class="status-meta">{'Siap Deteksi' if ocr_active else 'Nonaktif'}</span>
-            </div>
-        </div>
-        <div class="status-chip-card">
-            <span class="status-dot {'active' if db_active else 'inactive'}"></span>
-            <div class="status-text-group">
-                <span class="status-title">Database SQLite</span>
-                <span class="status-meta">{'Terhubung' if db_active else 'Terputus'}</span>
-            </div>
-        </div>
-        <div class="status-chip-card">
-            <span class="status-dot {'active' if cam_active else 'inactive'}"></span>
-            <div class="status-text-group">
-                <span class="status-title">Kamera WebRTC</span>
-                <span class="status-meta">{'Online / Standby' if cam_active else 'Offline'}</span>
-            </div>
+<!-- 1. PANEL STATUS SISTEM AI -->
+<div class="ai-status-panel">
+    <div class="status-chip-card">
+        <span class="status-dot {yolo_dot}"></span>
+        <div class="status-text-group">
+            <span class="status-title">Model YOLOv8</span>
+            <span class="status-meta">{yolo_txt}</span>
         </div>
     </div>
-
-    <!-- 2. HERO BANNER -->
-    <div class="guide-hero">
-        <h2 class="guide-hero-title">Alur Kerja Sistem Smart Parking</h2>
-        <p class="guide-hero-subtitle">
-            Arsitektur pipeline berbasis Computer Vision dan Deep Learning untuk mengenali plat nomor kendaraan (mobil & motor) secara realtime dari berbagai sudut, mencocokkan registrasi kampus, serta mengontrol palang otomatis.
-        </p>
-        <div class="guide-hero-badges">
-            <span class="hero-pill">🎯 Ultralytics YOLO</span>
-            <span class="hero-pill">🔍 EasyOCR + PyTorch</span>
-            <span class="hero-pill">📹 Streamlit WebRTC</span>
-            <span class="hero-pill">🗄️ SQLite3 Database</span>
+    <div class="status-chip-card">
+        <span class="status-dot {ocr_dot}"></span>
+        <div class="status-text-group">
+            <span class="status-title">EasyOCR Engine</span>
+            <span class="status-meta">{ocr_txt}</span>
         </div>
     </div>
-
-    <!-- 3. PIPELINE TIMELINE VERTIKAL 7 TAHAP -->
-    <div class="section-heading">
-        <h3>🔄 Pipeline Pemrosesan Citra & Logika Parkir (7 Tahap)</h3>
-    </div>
-
-    <div class="timeline-container">
-        <div class="timeline-line"></div>
-
-        <!-- TAHAP 1 -->
-        <div class="timeline-step">
-            <div class="step-circle">1</div>
-            <div class="timeline-card">
-                <div class="timeline-card-header">
-                    <div class="timeline-card-title">
-                        <span>📹 Input Citra (Capture & Live Streaming)</span>
-                    </div>
-                    <div class="tech-chip-group">
-                        <span class="tech-chip">WebRTC</span>
-                        <span class="tech-chip">Zero-Install</span>
-                        <span class="tech-chip">Mobile & PC</span>
-                    </div>
-                </div>
-                <p class="timeline-card-desc">
-                    Video real-time dialirkan dari kamera laptop maupun smartphone petugas pos menggunakan protokol <strong>WebRTC (streamlit-webrtc)</strong>. Petugas cukup mengakses URL peramban (browser) secara aman tanpa perlu instalasi aplikasi khusus.
-                </p>
-            </div>
-        </div>
-
-        <!-- TAHAP 2 -->
-        <div class="timeline-step">
-            <div class="step-circle">2</div>
-            <div class="timeline-card">
-                <div class="timeline-card-header">
-                    <div class="timeline-card-title">
-                        <span>🎯 Deteksi Lokasi Plat Nomor (YOLO)</span>
-                    </div>
-                    <div class="tech-chip-group">
-                        <span class="tech-chip">YOLOv8</span>
-                        <span class="tech-chip">AR 1.10 - 5.80</span>
-                        <span class="tech-chip">Motor 52% Split</span>
-                    </div>
-                </div>
-                <p class="timeline-card-desc">
-                    Model AI melokalisasi kotak plat nomor pada resolusi dinamis. Dilengkapi <strong>filter aspek rasio (1.10 – 5.80)</strong> untuk menolak objek bukan plat seperti wajah, telapak tangan, atau sablon baju. Untuk plat motor yang menyatu dengan spatbor belakang, AI otomatis memotong ke <strong>52% area atas</strong> tempat plat berada.
-                </p>
-            </div>
-        </div>
-
-        <!-- TAHAP 3 -->
-        <div class="timeline-step">
-            <div class="step-circle">3</div>
-            <div class="timeline-card">
-                <div class="timeline-card-header">
-                    <div class="timeline-card-title">
-                        <span>🟩 Stabilisasi Bounding Box (SmoothBoxTracker)</span>
-                    </div>
-                    <div class="tech-chip-group">
-                        <span class="tech-chip">EMA α=0.65</span>
-                        <span class="tech-chip">IoU Matching</span>
-                        <span class="tech-chip">Grace Period 8-Frames</span>
-                    </div>
-                </div>
-                <p class="timeline-card-desc">
-                    Pelacak temporal menghilangkan jitter (getaran tangan) menggunakan <strong>Exponential Moving Average (EMA)</strong>. Kotak deteksi dikunci kontinuitasnya dengan <strong>IoU Proximity Matching</strong>, serta diberi <em>grace period</em> (8 frame) agar kotak hijau tidak berkedip atau hilang saat kamera bergerak.
-                </p>
-            </div>
-        </div>
-
-        <!-- TAHAP 4 -->
-        <div class="timeline-step">
-            <div class="step-circle">4</div>
-            <div class="timeline-card">
-                <div class="timeline-card-header">
-                    <div class="timeline-card-title">
-                        <span>📐 Pelurusan Kemiringan Plat (Auto-Deskewing)</span>
-                    </div>
-                    <div class="tech-chip-group">
-                        <span class="tech-chip">OpenCV</span>
-                        <span class="tech-chip">Hough Line</span>
-                        <span class="tech-chip">Angle ±45°</span>
-                    </div>
-                </div>
-                <p class="timeline-card-desc">
-                    Posisi kamera pos parkir umumnya berada di samping kendaraan. Algoritma <strong>Hough Line Transform</strong> mendeteksi sudut kemiringan plat hingga sudut <strong>45°</strong> (serong kanan/kiri), kemudian memutar (rotasi) citra plat secara otomatis agar lurus horizontal sebelum dibaca OCR.
-                </p>
-            </div>
-        </div>
-
-        <!-- TAHAP 5 -->
-        <div class="timeline-step">
-            <div class="step-circle">5</div>
-            <div class="timeline-card">
-                <div class="timeline-card-header">
-                    <div class="timeline-card-title">
-                        <span>🔍 Pembacaan Karakter (EasyOCR + Heuristik Plat)</span>
-                    </div>
-                    <div class="tech-chip-group">
-                        <span class="tech-chip">EasyOCR</span>
-                        <span class="tech-chip">CLAHE</span>
-                        <span class="tech-chip">Indonesian Regex</span>
-                    </div>
-                </div>
-                <p class="timeline-card-desc">
-                    Citra plat ditingkatkan kontrasnya dengan CLAHE. <strong>EasyOCR</strong> mengekstrak teks karakter alfanumerik. Modul disambiguasi konteks plat Indonesia <code>[1-2 Wilayah][1-4 Angka][0-3 Seri]</code> mengoreksi karakter tertukar otomatis (misal: <em>O/D &rarr; 0</em>, <em>I &rarr; 1</em> pada angka tengah, serta <em>4 &rarr; A</em> pada seri).
-                </p>
-            </div>
-        </div>
-
-        <!-- TAHAP 6 -->
-        <div class="timeline-step">
-            <div class="step-circle">6</div>
-            <div class="timeline-card">
-                <div class="timeline-card-header">
-                    <div class="timeline-card-title">
-                        <span>💳 Logika Parkir & Skema Tarif (parking.db)</span>
-                    </div>
-                    <div class="tech-chip-group">
-                        <span class="tech-chip">SQLite3</span>
-                        <span class="tech-chip">Role-Based Fee</span>
-                        <span class="tech-chip">Duration Calc</span>
-                    </div>
-                </div>
-                <p class="timeline-card-desc">
-                    Plat dicocokkan ke database kampus: <strong>Dosen (Rp0 / Gratis)</strong>, <strong>Mahasiswa (Rp2.000 flat)</strong>, dan <strong>Tamu (Rp5.000)</strong>. Pada gerbang KELUAR (OUT), sistem otomatis menghitung durasi parkir dari waktu masuk terakhir (contoh: <em>45 Menit</em> atau <em>2 Jam 10 Menit</em>).
-                </p>
-            </div>
-        </div>
-
-        <!-- TAHAP 7 -->
-        <div class="timeline-step">
-            <div class="step-circle">7</div>
-            <div class="timeline-card">
-                <div class="timeline-card-header">
-                    <div class="timeline-card-title">
-                        <span>🚧 Kontrol Palang & Pencatatan Transaksi</span>
-                    </div>
-                    <div class="tech-chip-group">
-                        <span class="tech-chip">Barrier Actuator</span>
-                        <span class="tech-chip">Audit Trail</span>
-                        <span class="tech-chip">Live Analytics</span>
-                    </div>
-                </div>
-                <p class="timeline-card-desc">
-                    Status palang gerbang berubah menjadi <strong>BUKA</strong> secara visual dengan indikator animasi. Seluruh data transaksi (waktu, plat, nama pemilik, kategori, durasi, dan biaya) dicatat permanen ke database serta disinkronkan ke <strong>Dashboard Ringkasan</strong>.
-                </p>
-            </div>
+    <div class="status-chip-card">
+        <span class="status-dot {db_dot}"></span>
+        <div class="status-text-group">
+            <span class="status-title">Database SQLite</span>
+            <span class="status-meta">{db_txt}</span>
         </div>
     </div>
-
-    <!-- 4. VISUAL CONTOH KOREKSI OCR -->
-    <div class="section-heading">
-        <h3>🧠 Contoh Disambiguasi Cerdas Karakter Plat Indonesia</h3>
-    </div>
-
-    <div class="ocr-demo-grid">
-        <div class="ocr-demo-card">
-            <div class="ocr-demo-title">🚗 Contoh 1: Kasus Plat Mobil (Huruf O terbaca di tengah angka)</div>
-            <div class="ocr-comparison-row">
-                <div class="ocr-plate-box">
-                    <span class="ocr-label-small">Mentah dari OCR</span>
-                    <span class="plate-raw">B 6<span class="hl-yellow">O</span>91 JGU</span>
-                </div>
-                <span class="arrow-icon">➔</span>
-                <div class="ocr-plate-box">
-                    <span class="ocr-label-small">Hasil Disambiguasi AI</span>
-                    <span class="plate-corrected">B 6<span class="hl-green">0</span>91 JGU</span>
-                </div>
-            </div>
-            <p class="ocr-explanation">
-                Aturan tata bahasa plat Indonesia mewajibkan segmen tengah adalah angka nomor polisi. AI secara otomatis mengubah huruf 'O' menjadi angka '0' dan merapikan spasi standar.
-            </p>
-        </div>
-
-        <div class="ocr-demo-card">
-            <div class="ocr-demo-title">🏍️ Contoh 2: Kasus Plat Motor (Noise Border & Angka 4)</div>
-            <div class="ocr-comparison-row">
-                <div class="ocr-plate-box">
-                    <span class="ocr-label-small">Mentah dari OCR</span>
-                    <span class="plate-raw">F<span class="hl-yellow">L</span>220 FG<span class="hl-yellow">H</span></span>
-                </div>
-                <span class="arrow-icon">➔</span>
-                <div class="ocr-plate-box">
-                    <span class="ocr-label-small">Hasil Disambiguasi AI</span>
-                    <span class="plate-corrected">F <span class="hl-green">4</span>220 FG<span class="hl-green">M</span></span>
-                </div>
-            </div>
-            <p class="ocr-explanation">
-                Huruf 'L' yang tertukar dengan angka '4' dan noise baut belakang pada huruf 'M' dikoreksi berdasarkan perbandingan kamus seri dan pola wilayah nopol Bogor/Jawa Barat.
-            </p>
+    <div class="status-chip-card">
+        <span class="status-dot {cam_dot}"></span>
+        <div class="status-text-group">
+            <span class="status-title">Kamera WebRTC</span>
+            <span class="status-meta">{cam_txt}</span>
         </div>
     </div>
-
-    <!-- 5. KARTU TARIF -->
-    <div class="section-heading">
-        <h3>🎫 Kebijakan Tarif & Hak Akses Parkir Kampus</h3>
-    </div>
-
-    <div class="tariff-grid">
-        <div class="tariff-card dosen">
-            <div>
-                <span class="tariff-badge green">SIVITAS AKADEMIKA</span>
-                <div class="tariff-role">👨‍🏫 Dosen & Tendik</div>
-                <div class="tariff-price free">Rp 0</div>
-            </div>
-            <p class="tariff-desc">
-                Akses parkir gratis khusus dosen, staf, dan tenaga kependidikan tetap/luar biasa yang terdaftar resmi di basis data kampus.
-            </p>
-        </div>
-
-        <div class="tariff-card mahasiswa">
-            <div>
-                <span class="tariff-badge blue">SUBSIDI KAMPUS</span>
-                <div class="tariff-role">🎓 Mahasiswa Aktif</div>
-                <div class="tariff-price mhs">Rp 2.000</div>
-            </div>
-            <p class="tariff-desc">
-                Tarif subsidi flat sekali masuk untuk mahasiswa aktif terdaftar. Tidak dikenakan biaya per jam tambahan.
-            </p>
-        </div>
-
-        <div class="tariff-card tamu">
-            <div>
-                <span class="tariff-badge gold">PENGUNJUNG LUAR</span>
-                <div class="tariff-role">🚗 Tamu / Umum</div>
-                <div class="tariff-price guest">Rp 5.000</div>
-            </div>
-            <p class="tariff-desc">
-                Kendaraan tamu atau luar kampus yang belum terdaftar. Tiket virtual otomatis diterbitkan saat masuk melalui gerbang IN.
-            </p>
-        </div>
-    </div>
-
-    <!-- 6. TABEL TECH STACK -->
-    <div class="section-heading">
-        <h3>💻 Arsitektur Teknologi (Tech Stack)</h3>
-    </div>
-
-    <div class="table-card">
-        <table class="tech-table">
-            <thead>
-                <tr>
-                    <th style="width: 25%;">Komponen</th>
-                    <th style="width: 30%;">Teknologi</th>
-                    <th style="width: 45%;">Peran & Fungsionalitas</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><strong>User Interface</strong></td>
-                    <td><span class="table-tech-chip">Streamlit (Python)</span></td>
-                    <td>Antarmuka web modern, responsif desktop & smartphone petugas</td>
-                </tr>
-                <tr>
-                    <td><strong>Live Stream</strong></td>
-                    <td><span class="table-tech-chip">Streamlit WebRTC</span></td>
-                    <td>Streaming video kamera pos/HP berlatensi rendah langsung lewat browser</td>
-                </tr>
-                <tr>
-                    <td><strong>Object Detection</strong></td>
-                    <td><span class="table-tech-chip">Ultralytics YOLOv8</span></td>
-                    <td>Lokalisasi bounding box plat nomor secara presisi dan cepat</td>
-                </tr>
-                <tr>
-                    <td><strong>Image Processing</strong></td>
-                    <td><span class="table-tech-chip">OpenCV (cv2)</span></td>
-                    <td>Auto-deskewing (Hough), CLAHE contrast, dan filtering rasio aspek</td>
-                </tr>
-                <tr>
-                    <td><strong>OCR Engine</strong></td>
-                    <td><span class="table-tech-chip">EasyOCR + PyTorch</span></td>
-                    <td>Pengenalan karakter alfanumerik pada plat nomor kendaraan</td>
-                </tr>
-                <tr>
-                    <td><strong>Tracking Filter</strong></td>
-                    <td><span class="table-tech-chip">EMA + IoU Matching</span></td>
-                    <td>Anti-jitter, pencegah flicker, dan stabilisasi pelacak gerak kamera</td>
-                </tr>
-                <tr>
-                    <td><strong>Database</strong></td>
-                    <td><span class="table-tech-chip">SQLite3 (parking.db)</span></td>
-                    <td>Penyimpanan data master sivitas, tarif, dan audit log transaksi</td>
-                </tr>
-                <tr>
-                    <td><strong>Tunneling / PWA</strong></td>
-                    <td><span class="table-tech-chip">Localtunnel</span></td>
-                    <td>Membuka sambungan HTTPS kamera HP nirkabel secara aman</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
 </div>
-"""
-    st.markdown(html_code, unsafe_allow_html=True)
 
+<!-- 2. HERO BANNER -->
+<div class="guide-hero">
+    <h2 class="guide-hero-title">Alur Kerja Sistem Smart Parking</h2>
+    <p class="guide-hero-subtitle">
+        Arsitektur pipeline berbasis Computer Vision dan Deep Learning untuk mengenali plat nomor kendaraan (mobil & motor) secara realtime dari berbagai sudut, mencocokkan registrasi kampus, serta mengontrol palang otomatis.
+    </p>
+    <div class="guide-hero-badges">
+        <span class="hero-pill">🎯 Ultralytics YOLO</span>
+        <span class="hero-pill">🔍 EasyOCR + PyTorch</span>
+        <span class="hero-pill">📹 Streamlit WebRTC</span>
+        <span class="hero-pill">🗄️ SQLite3 Database</span>
+    </div>
+</div>
+
+<!-- 3. PIPELINE TIMELINE VERTIKAL 7 TAHAP -->
+<div class="section-heading">
+    <h3>🔄 Pipeline Pemrosesan Citra & Logika Parkir (7 Tahap)</h3>
+</div>
+
+<div class="timeline-container">
+    <div class="timeline-line"></div>
+
+    <!-- TAHAP 1 -->
+    <div class="timeline-step">
+        <div class="step-circle">1</div>
+        <div class="timeline-card">
+            <div class="timeline-card-header">
+                <div class="timeline-card-title">
+                    <span>📹 Input Citra (Capture & Live Streaming)</span>
+                </div>
+                <div class="tech-chip-group">
+                    <span class="tech-chip">WebRTC</span>
+                    <span class="tech-chip">Zero-Install</span>
+                    <span class="tech-chip">Mobile & PC</span>
+                </div>
+            </div>
+            <p class="timeline-card-desc">
+                Video real-time dialirkan dari kamera laptop maupun smartphone petugas pos menggunakan protokol <strong>WebRTC (streamlit-webrtc)</strong>. Petugas cukup mengakses URL peramban (browser) secara aman tanpa perlu instalasi aplikasi khusus.
+            </p>
+        </div>
+    </div>
+
+    <!-- TAHAP 2 -->
+    <div class="timeline-step">
+        <div class="step-circle">2</div>
+        <div class="timeline-card">
+            <div class="timeline-card-header">
+                <div class="timeline-card-title">
+                    <span>🎯 Deteksi Lokasi Plat Nomor (YOLO)</span>
+                </div>
+                <div class="tech-chip-group">
+                    <span class="tech-chip">YOLOv8</span>
+                    <span class="tech-chip">AR 1.10 - 5.80</span>
+                    <span class="tech-chip">Motor 52% Split</span>
+                </div>
+            </div>
+            <p class="timeline-card-desc">
+                Model AI melokalisasi kotak plat nomor pada resolusi dinamis. Dilengkapi <strong>filter aspek rasio (1.10 – 5.80)</strong> untuk menolak objek bukan plat seperti wajah, telapak tangan, atau sablon baju. Untuk plat motor yang menyatu dengan spatbor belakang, AI otomatis memotong ke <strong>52% area atas</strong> tempat plat berada.
+            </p>
+        </div>
+    </div>
+
+    <!-- TAHAP 3 -->
+    <div class="timeline-step">
+        <div class="step-circle">3</div>
+        <div class="timeline-card">
+            <div class="timeline-card-header">
+                <div class="timeline-card-title">
+                    <span>🟩 Stabilisasi Bounding Box (SmoothBoxTracker)</span>
+                </div>
+                <div class="tech-chip-group">
+                    <span class="tech-chip">EMA α=0.65</span>
+                    <span class="tech-chip">IoU Matching</span>
+                    <span class="tech-chip">Grace Period 8-Frames</span>
+                </div>
+            </div>
+            <p class="timeline-card-desc">
+                Pelacak temporal menghilangkan jitter (getaran tangan) menggunakan <strong>Exponential Moving Average (EMA)</strong>. Kotak deteksi dikunci kontinuitasnya dengan <strong>IoU Proximity Matching</strong>, serta diberi <em>grace period</em> (8 frame) agar kotak hijau tidak berkedip atau hilang saat kamera bergerak.
+            </p>
+        </div>
+    </div>
+
+    <!-- TAHAP 4 -->
+    <div class="timeline-step">
+        <div class="step-circle">4</div>
+        <div class="timeline-card">
+            <div class="timeline-card-header">
+                <div class="timeline-card-title">
+                    <span>📐 Pelurusan Kemiringan Plat (Auto-Deskewing)</span>
+                </div>
+                <div class="tech-chip-group">
+                    <span class="tech-chip">OpenCV</span>
+                    <span class="tech-chip">Hough Line</span>
+                    <span class="tech-chip">Angle ±45°</span>
+                </div>
+            </div>
+            <p class="timeline-card-desc">
+                Posisi kamera pos parkir umumnya berada di samping kendaraan. Algoritma <strong>Hough Line Transform</strong> mendeteksi sudut kemiringan plat hingga sudut <strong>45°</strong> (serong kanan/kiri), kemudian memutar (rotasi) citra plat secara otomatis agar lurus horizontal sebelum dibaca OCR.
+            </p>
+        </div>
+    </div>
+
+    <!-- TAHAP 5 -->
+    <div class="timeline-step">
+        <div class="step-circle">5</div>
+        <div class="timeline-card">
+            <div class="timeline-card-header">
+                <div class="timeline-card-title">
+                    <span>🔍 Pembacaan Karakter (EasyOCR + Heuristik Plat)</span>
+                </div>
+                <div class="tech-chip-group">
+                    <span class="tech-chip">EasyOCR</span>
+                    <span class="tech-chip">CLAHE</span>
+                    <span class="tech-chip">Indonesian Regex</span>
+                </div>
+            </div>
+            <p class="timeline-card-desc">
+                Citra plat ditingkatkan kontrasnya dengan CLAHE. <strong>EasyOCR</strong> mengekstrak teks karakter alfanumerik. Modul disambiguasi konteks plat Indonesia <code>[1-2 Wilayah][1-4 Angka][0-3 Seri]</code> mengoreksi karakter tertukar otomatis (misal: <em>O/D &rarr; 0</em>, <em>I &rarr; 1</em> pada angka tengah, serta <em>4 &rarr; A</em> pada seri).
+            </p>
+        </div>
+    </div>
+
+    <!-- TAHAP 6 -->
+    <div class="timeline-step">
+        <div class="step-circle">6</div>
+        <div class="timeline-card">
+            <div class="timeline-card-header">
+                <div class="timeline-card-title">
+                    <span>💳 Logika Parkir & Skema Tarif (parking.db)</span>
+                </div>
+                <div class="tech-chip-group">
+                    <span class="tech-chip">SQLite3</span>
+                    <span class="tech-chip">Role-Based Fee</span>
+                    <span class="tech-chip">Duration Calc</span>
+                </div>
+            </div>
+            <p class="timeline-card-desc">
+                Plat dicocokkan ke database kampus: <strong>Dosen (Rp0 / Gratis)</strong>, <strong>Mahasiswa (Rp2.000 flat)</strong>, dan <strong>Tamu (Rp5.000)</strong>. Pada gerbang KELUAR (OUT), sistem otomatis menghitung durasi parkir dari waktu masuk terakhir (contoh: <em>45 Menit</em> atau <em>2 Jam 10 Menit</em>).
+            </p>
+        </div>
+    </div>
+
+    <!-- TAHAP 7 -->
+    <div class="timeline-step">
+        <div class="step-circle">7</div>
+        <div class="timeline-card">
+            <div class="timeline-card-header">
+                <div class="timeline-card-title">
+                    <span>🚧 Kontrol Palang & Pencatatan Transaksi</span>
+                </div>
+                <div class="tech-chip-group">
+                    <span class="tech-chip">Barrier Actuator</span>
+                    <span class="tech-chip">Audit Trail</span>
+                    <span class="tech-chip">Live Analytics</span>
+                </div>
+            </div>
+            <p class="timeline-card-desc">
+                Status palang gerbang berubah menjadi <strong>BUKA</strong> secara visual dengan indikator animasi. Seluruh data transaksi (waktu, plat, nama pemilik, kategori, durasi, dan biaya) dicatat permanen ke database serta disinkronkan ke <strong>Dashboard Ringkasan</strong>.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- 4. VISUAL CONTOH KOREKSI OCR -->
+<div class="section-heading">
+    <h3>🧠 Contoh Disambiguasi Cerdas Karakter Plat Indonesia</h3>
+</div>
+
+<div class="ocr-demo-grid">
+    <div class="ocr-demo-card">
+        <div class="ocr-demo-title">🚗 Contoh 1: Kasus Plat Mobil (Huruf O terbaca di tengah angka)</div>
+        <div class="ocr-comparison-row">
+            <div class="ocr-plate-box">
+                <span class="ocr-label-small">Mentah dari OCR</span>
+                <span class="plate-raw">B 6<span class="hl-yellow">O</span>91 JGU</span>
+            </div>
+            <span class="arrow-icon">➔</span>
+            <div class="ocr-plate-box">
+                <span class="ocr-label-small">Hasil Disambiguasi AI</span>
+                <span class="plate-corrected">B 6<span class="hl-green">0</span>91 JGU</span>
+            </div>
+        </div>
+        <p class="ocr-explanation">
+            Aturan tata bahasa plat Indonesia mewajibkan segmen tengah adalah angka nomor polisi. AI secara otomatis mengubah huruf 'O' menjadi angka '0' dan merapikan spasi standar.
+        </p>
+    </div>
+
+    <div class="ocr-demo-card">
+        <div class="ocr-demo-title">🏍️ Contoh 2: Kasus Plat Motor (Noise Border & Angka 4)</div>
+        <div class="ocr-comparison-row">
+            <div class="ocr-plate-box">
+                <span class="ocr-label-small">Mentah dari OCR</span>
+                <span class="plate-raw">F<span class="hl-yellow">L</span>220 FG<span class="hl-yellow">H</span></span>
+            </div>
+            <span class="arrow-icon">➔</span>
+            <div class="ocr-plate-box">
+                <span class="ocr-label-small">Hasil Disambiguasi AI</span>
+                <span class="plate-corrected">F <span class="hl-green">4</span>220 FG<span class="hl-green">M</span></span>
+            </div>
+        </div>
+        <p class="ocr-explanation">
+            Huruf 'L' yang tertukar dengan angka '4' dan noise baut belakang pada huruf 'M' dikoreksi berdasarkan perbandingan kamus seri dan pola wilayah nopol Bogor/Jawa Barat.
+        </p>
+    </div>
+</div>
+
+<!-- 5. KARTU TARIF -->
+<div class="section-heading">
+    <h3>🎫 Kebijakan Tarif & Hak Akses Parkir Kampus</h3>
+</div>
+
+<div class="tariff-grid">
+    <div class="tariff-card dosen">
+        <div>
+            <span class="tariff-badge green">SIVITAS AKADEMIKA</span>
+            <div class="tariff-role">👨‍🏫 Dosen & Tendik</div>
+            <div class="tariff-price free">Rp 0</div>
+        </div>
+        <p class="tariff-desc">
+            Akses parkir gratis khusus dosen, staf, dan tenaga kependidikan tetap/luar biasa yang terdaftar resmi di basis data kampus.
+        </p>
+    </div>
+
+    <div class="tariff-card mahasiswa">
+        <div>
+            <span class="tariff-badge blue">SUBSIDI KAMPUS</span>
+            <div class="tariff-role">🎓 Mahasiswa Aktif</div>
+            <div class="tariff-price mhs">Rp 2.000</div>
+        </div>
+        <p class="tariff-desc">
+            Tarif subsidi flat sekali masuk untuk mahasiswa aktif terdaftar. Tidak dikenakan biaya per jam tambahan.
+        </p>
+    </div>
+
+    <div class="tariff-card tamu">
+        <div>
+            <span class="tariff-badge gold">PENGUNJUNG LUAR</span>
+            <div class="tariff-role">🚗 Tamu / Umum</div>
+            <div class="tariff-price guest">Rp 5.000</div>
+        </div>
+        <p class="tariff-desc">
+            Kendaraan tamu atau luar kampus yang belum terdaftar. Tiket virtual otomatis diterbitkan saat masuk melalui gerbang IN.
+        </p>
+    </div>
+</div>
+
+<!-- 6. TABEL TECH STACK -->
+<div class="section-heading">
+    <h3>💻 Arsitektur Teknologi (Tech Stack)</h3>
+</div>
+
+<div class="table-card">
+    <table class="tech-table">
+        <thead>
+            <tr>
+                <th style="width: 25%;">Komponen</th>
+                <th style="width: 30%;">Teknologi</th>
+                <th style="width: 45%;">Peran & Fungsionalitas</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>User Interface</strong></td>
+                <td><span class="table-tech-chip">Streamlit (Python)</span></td>
+                <td>Antarmuka web modern, responsif desktop & smartphone petugas</td>
+            </tr>
+            <tr>
+                <td><strong>Live Stream</strong></td>
+                <td><span class="table-tech-chip">Streamlit WebRTC</span></td>
+                <td>Streaming video kamera pos/HP berlatensi rendah langsung lewat browser</td>
+            </tr>
+            <tr>
+                <td><strong>Object Detection</strong></td>
+                <td><span class="table-tech-chip">Ultralytics YOLOv8</span></td>
+                <td>Lokalisasi bounding box plat nomor secara presisi dan cepat</td>
+            </tr>
+            <tr>
+                <td><strong>Image Processing</strong></td>
+                <td><span class="table-tech-chip">OpenCV (cv2)</span></td>
+                <td>Auto-deskewing (Hough), CLAHE contrast, dan filtering rasio aspek</td>
+            </tr>
+            <tr>
+                <td><strong>OCR Engine</strong></td>
+                <td><span class="table-tech-chip">EasyOCR + PyTorch</span></td>
+                <td>Pengenalan karakter alfanumerik pada plat nomor kendaraan</td>
+            </tr>
+            <tr>
+                <td><strong>Tracking Filter</strong></td>
+                <td><span class="table-tech-chip">EMA + IoU Matching</span></td>
+                <td>Anti-jitter, pencegah flicker, dan stabilisasi pelacak gerak kamera</td>
+            </tr>
+            <tr>
+                <td><strong>Database</strong></td>
+                <td><span class="table-tech-chip">SQLite3 (parking.db)</span></td>
+                <td>Penyimpanan data master sivitas, tarif, dan audit log transaksi</td>
+            </tr>
+            <tr>
+                <td><strong>Tunneling / PWA</strong></td>
+                <td><span class="table-tech-chip">Localtunnel</span></td>
+                <td>Membuka sambungan HTTPS kamera HP nirkabel secara aman</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+</div>"""
+
+    if hasattr(st, "html"):
+        st.html(html_code)
+    else:
+        st.markdown(html_code, unsafe_allow_html=True)
