@@ -251,92 +251,152 @@ with tab_gate:
             if not is_model_available:
                 st.warning("⚠️ File model YOLO belum ditemukan. Gunakan mode 'Unggah Foto' atau 'Ketik Manual'.")
             else:
-                try:
-                    from streamlit_webrtc import webrtc_streamer, WebRtcMode, VideoProcessorBase
-                    from ocr_engine import extract_plate_text
-                    model, reader = get_yolo_and_ocr(DEFAULT_MODEL_PATH)
+                sub_cam = st.radio(
+                    "Pilihan Tipe Kamera:",
+                    ["⚡ Kamera Cepat (Snapshot Browser — Ringan & Anti Lag)", "📹 Kamera Streaming (WebRTC Real-Time)"],
+                    horizontal=True,
+                )
 
-                    class LiveCameraProcessor(VideoProcessorBase):
-                        def __init__(self):
-                            self.lock = threading.Lock()
-                            self.latest_frame = None
-                            self.frame_count = 0
-                            self.detected_text = None
-                            self.detected_conf = 0.0
+                # OPSI A: KAMERA CEPAT (NATIVE BROWSER HTML5 - 0% LAG)
+                if "Snapshot" in sub_cam:
+                    st.caption("💡 *Kamera browser langsung: sangat halus (60 FPS), tidak membebani CPU laptop, dan hasil foto sangat tajam.*")
+                    cam_shot = st.camera_input("Arahkan kamera ke plat nomor kendaraan:", key="native_cam_input")
+                    if cam_shot is not None:
+                        file_bytes = np.asarray(bytearray(cam_shot.read()), dtype=np.uint8)
+                        img_cv = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
-                        def recv(self, frame):
-                            img = frame.to_ndarray(format="bgr24")
-                            self.frame_count += 1
-                            with self.lock:
-                                self.latest_frame = img.copy()
+                        with st.spinner("AI sedang membaca plat nomor dari foto..."):
+                            from ocr_engine import extract_plate_text
+                            model, reader = get_yolo_and_ocr(DEFAULT_MODEL_PATH)
+                            preds = model.predict(source=img_cv, conf=conf_threshold, verbose=False, imgsz=640)
+                            found = []
+                            for p in preds:
+                                for b in p.boxes:
+                                    x1, y1, x2, y2 = map(int, b.xyxy[0].tolist())
+                                    crop = img_cv[max(0, y1):min(img_cv.shape[0], y2), max(0, x1):min(img_cv.shape[1], x2)]
+                                    if crop.size > 0:
+                                        t, c, _ = extract_plate_text(reader, crop)
+                                        if t and normalize_plate(t):
+                                            found.append((t, c))
+                            if not found:
+                                t, c, _ = extract_plate_text(reader, img_cv)
+                                if t and normalize_plate(t):
+                                    found.append((t, c))
 
-                            # Inferensi tiap N frame
-                            if self.frame_count % frame_skip == 0:
-                                try:
-                                    preds = model.predict(source=img, conf=conf_threshold, verbose=False, imgsz=480)
-                                    for p in preds:
-                                        for box in p.boxes:
-                                            x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-                                            crop = img[max(0, y1):min(img.shape[0], y2), max(0, x1):min(img.shape[1], x2)]
-                                            if crop.size > 0:
-                                                txt, conf, _ = extract_plate_text(reader, crop)
-                                                if txt and normalize_plate(txt):
-                                                    with self.lock:
-                                                        self.detected_text = txt
-                                                        self.detected_conf = conf
-                                except Exception:
-                                    pass
+                            if found:
+                                best_t, best_c = max(found, key=lambda x: x[1])
+                                st.session_state["current_plate"] = best_t
+                                st.session_state["current_conf"] = best_c
+                                st.session_state["current_source"] = "Kamera Browser"
+                                st.toast(f"Plat terdeteksi: {best_t}", icon="✅")
+                                st.rerun()
+                            else:
+                                st.warning("Plat belum terbaca jelas. Pastikan plat berada di tengah dan pencahayaan cukup.")
 
-                            # Gambar teks plat jika terdeteksi
-                            with self.lock:
-                                if self.detected_text:
-                                    cv2.putText(img, f"Plat: {self.detected_text}", (20, 40),
-                                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 220, 0), 2)
+                # OPSI B: KAMERA STREAMING WEBRTC (OPTIMIZED 30 FPS)
+                else:
+                    try:
+                        from streamlit_webrtc import webrtc_streamer, WebRtcMode, VideoProcessorBase
+                        from ocr_engine import extract_plate_text
+                        model, reader = get_yolo_and_ocr(DEFAULT_MODEL_PATH)
 
-                            return type(frame).from_ndarray(img, format="bgr24")
+                        class LiveCameraProcessor(VideoProcessorBase):
+                            def __init__(self):
+                                self.lock = threading.Lock()
+                                self.latest_frame = None
+                                self.frame_count = 0
+                                self.box = None
 
-                    st.write("Arahkan kamera ke plat kendaraan:")
-                    ctx = webrtc_streamer(
-                        key="gate-camera-stream",
-                        mode=WebRtcMode.SENDRECV,
-                        video_processor_factory=LiveCameraProcessor,
-                        media_stream_constraints={"video": True, "audio": False},
-                        async_processing=True,
-                    )
+                            def recv(self, frame):
+                                img = frame.to_ndarray(format="bgr24")
+                                self.frame_count += 1
+                                h, w = img.shape[:2]
 
-                    btn_scan = st.button("📸 SCAN / AMBIL PLAT SEKARANG", type="primary", use_container_width=True)
-                    if btn_scan and ctx.video_processor:
-                        with ctx.video_processor.lock:
-                            snap = ctx.video_processor.latest_frame
-                        if snap is not None:
-                            with st.spinner("AI sedang membaca plat dari kamera..."):
-                                from ocr_engine import extract_plate_text
-                                preds = model.predict(source=snap, conf=conf_threshold, verbose=False, imgsz=640)
-                                found = []
-                                for p in preds:
-                                    for b in p.boxes:
-                                        x1, y1, x2, y2 = map(int, b.xyxy[0].tolist())
-                                        crop = snap[max(0, y1):min(snap.shape[0], y2), max(0, x1):min(snap.shape[1], x2)]
-                                        if crop.size > 0:
-                                            t, c, _ = extract_plate_text(reader, crop)
-                                            if t and normalize_plate(t):
-                                                found.append((t, c))
-                                if not found:
-                                    t, c, _ = extract_plate_text(reader, snap)
-                                    if t and normalize_plate(t):
-                                        found.append((t, c))
+                                # Simpan frame asli untuk di-scan saat tombol ditekan
+                                with self.lock:
+                                    self.latest_frame = img.copy()
 
-                                if found:
-                                    best_t, best_c = max(found, key=lambda x: x[1])
-                                    st.session_state["current_plate"] = best_t
-                                    st.session_state["current_conf"] = best_c
-                                    st.session_state["current_source"] = "Kamera Langsung"
-                                    st.toast(f"Plat terdeteksi: {best_t}", icon="✅")
-                                    st.rerun()
+                                # Deteksi kotak plat dengan YOLO tiap N frame (Hanya YOLO ringan, TANPA EasyOCR di stream agar tidak lag)
+                                if self.frame_count % frame_skip == 0:
+                                    try:
+                                        preds = model.predict(source=img, conf=conf_threshold, verbose=False, imgsz=320)
+                                        found_box = None
+                                        for p in preds:
+                                            for b in p.boxes:
+                                                found_box = list(map(int, b.xyxy[0].tolist()))
+                                                break
+                                            if found_box:
+                                                break
+                                        with self.lock:
+                                            self.box = found_box
+                                    except Exception:
+                                        pass
+
+                                # Tampilkan visual feedback ke layar
+                                with self.lock:
+                                    cur_box = self.box
+
+                                if cur_box:
+                                    x1, y1, x2, y2 = cur_box
+                                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 230, 0), 2)
+                                    cv2.putText(img, "PLAT TERDETEKSI", (x1, max(20, y1 - 8)),
+                                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 230, 0), 2)
                                 else:
-                                    st.warning("Plat belum terbaca jelas. Dekatkan kamera atau atur pencahayaan.")
-                except Exception as e:
-                    st.error(f"Gagal mengaktifkan kamera: {e}")
+                                    # Kotak panduan (viewfinder) di tengah
+                                    cx, cy = w // 2, h // 2
+                                    bx1, by1 = cx - 150, cy - 50
+                                    bx2, by2 = cx + 150, cy + 50
+                                    cv2.rectangle(img, (bx1, by1), (bx2, by2), (0, 180, 255), 1, cv2.LINE_AA)
+                                    cv2.putText(img, "Arahkan Plat ke Sini", (bx1 + 10, by1 - 8),
+                                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 180, 255), 1)
+
+                                return type(frame).from_ndarray(img, format="bgr24")
+
+                        st.write("Arahkan kamera ke plat kendaraan:")
+                        ctx = webrtc_streamer(
+                            key="gate-camera-stream",
+                            mode=WebRtcMode.SENDRECV,
+                            video_processor_factory=LiveCameraProcessor,
+                            media_stream_constraints={
+                                "video": {"width": {"ideal": 640}, "height": {"ideal": 480}, "frameRate": {"ideal": 30}},
+                                "audio": False
+                            },
+                            async_processing=True,
+                        )
+
+                        btn_scan = st.button("📸 SCAN / AMBIL PLAT SEKARANG", type="primary", use_container_width=True)
+                        if btn_scan and ctx.video_processor:
+                            with ctx.video_processor.lock:
+                                snap = ctx.video_processor.latest_frame
+                            if snap is not None:
+                                with st.spinner("AI sedang membaca plat dari kamera..."):
+                                    from ocr_engine import extract_plate_text
+                                    preds = model.predict(source=snap, conf=conf_threshold, verbose=False, imgsz=640)
+                                    found = []
+                                    for p in preds:
+                                        for b in p.boxes:
+                                            x1, y1, x2, y2 = map(int, b.xyxy[0].tolist())
+                                            crop = snap[max(0, y1):min(snap.shape[0], y2), max(0, x1):min(snap.shape[1], x2)]
+                                            if crop.size > 0:
+                                                t, c, _ = extract_plate_text(reader, crop)
+                                                if t and normalize_plate(t):
+                                                    found.append((t, c))
+                                    if not found:
+                                        t, c, _ = extract_plate_text(reader, snap)
+                                        if t and normalize_plate(t):
+                                            found.append((t, c))
+
+                                    if found:
+                                        best_t, best_c = max(found, key=lambda x: x[1])
+                                        st.session_state["current_plate"] = best_t
+                                        st.session_state["current_conf"] = best_c
+                                        st.session_state["current_source"] = "Kamera Streaming"
+                                        st.toast(f"Plat terdeteksi: {best_t}", icon="✅")
+                                        st.rerun()
+                                    else:
+                                        st.warning("Plat belum terbaca jelas. Dekatkan kamera atau atur pencahayaan.")
+                    except Exception as e:
+                        st.error(f"Gagal mengaktifkan kamera streaming: {e}")
 
         # MODE 2: UNGGAH FOTO
         elif mode_input == "📁 Unggah Foto Kendaraan":

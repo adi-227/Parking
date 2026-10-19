@@ -135,3 +135,4 @@ python train_model.py --epochs 60 --batch 8 --auto-copy
 ## 📄 Lisensi & Kontributor
 Dikembangkan untuk keperluan sistem manajemen parkir kampus berbasis *Computer Vision* & *Deep Learning*.
 - Repository: [github.com/adi-227/Parking](https://github.com/adi-227/Parking)
+
