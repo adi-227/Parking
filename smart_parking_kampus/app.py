@@ -7,17 +7,33 @@ import numpy as np
 import streamlit as st
 from datetime import datetime
 
+import importlib
+import parking_logic
+importlib.reload(parking_logic)
+
 from parking_logic import (
     normalize_plate,
     format_plate_display,
     disambiguate_plate,
-    is_valid_plate_pattern,
     format_duration,
     decide,
     rupiah,
     TARIFFS,
     CATEGORIES,
 )
+
+try:
+    from parking_logic import is_valid_plate_pattern
+except (ImportError, AttributeError):
+    def is_valid_plate_pattern(value):
+        if not value:
+            return False
+        norm = normalize_plate(value)
+        if len(norm) < 3 or len(norm) > 10:
+            return False
+        has_digit = any(c.isdigit() for c in norm)
+        has_alpha = any(c.isalpha() for c in norm)
+        return has_digit and has_alpha and bool(re.match(r"^[A-Z]{1,2}[0-9]{1,4}[A-Z]{0,3}$", norm))
 import db_manager
 from dataset_validator import validate_dataset
 
