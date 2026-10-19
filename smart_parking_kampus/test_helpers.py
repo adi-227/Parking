@@ -38,6 +38,10 @@ class TestParkingLogic(unittest.TestCase):
         # O in middle number converted to 0, I converted to 1
         self.assertEqual(disambiguate_plate("B 12O4 XYZ"), "B1204XYZ")
         self.assertEqual(disambiguate_plate("B 1I34 XYZ"), "B1134XYZ")
+        # Leading / trailing border removal and B 6991 JGU
+        self.assertEqual(disambiguate_plate("IB 6991 JGU"), "B6991JGU")
+        self.assertEqual(disambiguate_plate("IB 6991 JCUL"), "B6991JGU")
+        self.assertEqual(disambiguate_plate("B 6991 JGU"), "B6991JGU")
 
     def test_tariffs(self):
         self.assertEqual(TARIFFS["Dosen"], 0)

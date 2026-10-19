@@ -9,7 +9,9 @@ from datetime import datetime
 
 import importlib
 import parking_logic
+import ocr_engine
 importlib.reload(parking_logic)
+importlib.reload(ocr_engine)
 
 from parking_logic import (
     normalize_plate,

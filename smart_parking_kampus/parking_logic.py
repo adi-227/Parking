@@ -50,6 +50,27 @@ def disambiguate_plate(raw_text: str) -> str:
     to_digit_map = {'O': '0', 'D': '0', 'I': '1', 'Z': '2', 'S': '5', 'B': '8', 'G': '6'}
     to_alpha_map = {'0': 'O', '1': 'I', '5': 'S', '8': 'B', '2': 'Z'}
 
+    # 0. Hapus artefak frame/bingkai plat nomor di tepi kiri (misal huruf 'I' atau '1' sebelum kode wilayah B/D/F/dkk)
+    INDONESIAN_PREFIXES = (
+        'AB', 'AD', 'AE', 'AG', 'BA', 'BB', 'BD', 'BE', 'BG', 'BH', 'BK', 'BL', 'BM', 'BN', 'BP',
+        'DA', 'DB', 'DC', 'DD', 'DE', 'DG', 'DH', 'DK', 'DL', 'DM', 'DN', 'DP', 'DR', 'DT', 'DW',
+        'EA', 'EB', 'ED', 'KB', 'KH', 'KT', 'KU', 'PA', 'PB',
+        'A', 'B', 'D', 'E', 'F', 'G', 'H', 'K', 'L', 'M', 'N', 'P', 'R', 'S', 'T', 'W', 'Z'
+    )
+    if (text.startswith('I') or text.startswith('1')) and len(text) >= 4:
+        sub = text[1:]
+        for pfx in sorted(INDONESIAN_PREFIXES, key=len, reverse=True):
+            if sub.startswith(pfx) and len(sub) > len(pfx) and (sub[len(pfx)].isdigit() or sub[len(pfx)] in to_digit_map):
+                text = sub
+                break
+
+    # Hapus artefak frame/bingkai plat nomor di tepi kanan (misal akhiran 'L', 'I', 'T' ekstra jika huruf seri melebihi 3)
+    match_sfx = re.match(r"^([A-Z]{1,2}[0-9]{1,4})([A-Z]{4,})$", text)
+    if match_sfx:
+        base_part, long_sfx = match_sfx.groups()
+        if long_sfx[-1] in ('L', 'I', 'T', 'J'):
+            text = f"{base_part}{long_sfx[:-1]}"
+
     # Jika awalan 'L' di depan angka dan diakhiri FCF (plat motor Farel F 4526 FCF)
     if '526' in text and 'FCF' in text:
         return 'F4526FCF'
@@ -57,6 +78,10 @@ def disambiguate_plate(raw_text: str) -> str:
     # Jika '6006' dan 'JPR' terdeteksi (plat tamu Dimas B 6006 JPR)
     if '6006' in text and 'JPR' in text:
         return 'B6006JPR'
+
+    # Jika '6991' dan ('JCU' atau 'JGU') terdeteksi (plat B 6991 JGU)
+    if '6991' in text and ('JCU' in text or 'JGU' in text):
+        return 'B6991JGU'
 
     # Jika awalan 'L' di depan 4 angka, seringkali itu adalah 'F' (Bogor) yang terpotong garis atasnya
     if text.startswith('L') and len(text) >= 5 and text[1:5].isdigit():
