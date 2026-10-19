@@ -29,6 +29,7 @@ from parking_logic import (
 )
 import db_manager
 from dataset_validator import validate_dataset
+from panduan_view import render_panduan_ai
 
 # ==============================================================================
 # INISIALISASI SISTEM & DATABASE
@@ -1071,18 +1072,13 @@ with tab_history:
 # TAB 4: PANDUAN SISTEM & STATUS AI
 # ==============================================================================
 with tab_guide:
-    st.subheader("Arsitektur Sistem & Status Model AI")
-
-    st.markdown("""
-### 🔄 Cara Kerja Sistem (Pipeline)
-1. **YOLO (Deteksi Plat):** Menemukan posisi kotak plat nomor pada foto/video kendaraan.
-2. **EasyOCR (Pembacaan Karakter):** Memotong kotak plat, membersihkan gambar (CLAHE contrast), dan membaca teks alfanumerik.
-3. **Pencocokan Database SQLite:** Teks plat dicocokkan ke daftar registrasi kampus.
-   - **Dosen:** Tarif **Rp0 (Gratis)**.
-   - **Mahasiswa:** Tarif **Rp2.000**.
-   - **Tamu / Luar Kampus:** Tarif **Rp5.000**.
-4. **Konfirmasi Petugas:** Petugas memverifikasi fisik kendaraan dan mencatat transaksi resmi ke sistem.
-    """)
+    ai_status = {
+        "yolo": os.path.exists(DEFAULT_MODEL_PATH),
+        "ocr": True,
+        "database": os.path.exists(os.path.join(APP_DIR, "parking.db")),
+        "camera": True,
+    }
+    render_panduan_ai(status=ai_status)
 
     st.divider()
     st.markdown("### 📊 Status Dataset & Model YOLO Saat Ini")
