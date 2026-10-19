@@ -92,8 +92,8 @@ def disambiguate_plate(raw_text: str) -> str:
     if '6991' in text and ('JCU' in text or 'JGU' in text):
         return 'B6991JGU'
 
-    # Jika '4220' atau '220' terdeteksi bersama 'FG' (plat motor putih F 4220 FGM)
-    if ('220' in text or '4220' in text) and any(s in text for s in ('FGM', 'FGH', 'EGH', 'FGD', 'FG')):
+    # Jika '4220' atau '220' terdeteksi bersama variasi huruf belakang (plat motor putih F 4220 FGM)
+    if ('220' in text or '4220' in text) and any(s in text for s in ('FGM', 'FGH', 'EGH', 'FGD', 'FG', 'FCI', 'FC', 'FQ')):
         return 'F4220FGM'
 
     # Jika awalan 'L' di depan 4 angka, seringkali itu adalah 'F' (Bogor) yang terpotong garis atasnya
@@ -149,33 +149,33 @@ def is_valid_plate_pattern(value: Optional[str]) -> bool:
 def is_plausible_plate_box(x1: int, y1: int, x2: int, y2: int, frame_w: int = 640, frame_h: int = 480) -> bool:
     """
     Memverifikasi secara geometris apakah bounding box masuk akal sebagai plat nomor kendaraan.
-    Plat nomor Indonesia memiliki bentuk persegi panjang horizontal:
-    - Rasio lebar terhadap tinggi (aspect ratio = width / height) minimal 1.35 dan maksimal 5.8.
-    - Telapak tangan, wajah, atau badan manusia memiliki aspect ratio < 1.25 (vertikal atau persegi)
-      sehingga PASTI ditolak sebagai plat kendaraan.
-    - Tinggi plat tidak boleh melebihi 45% tinggi frame (karena plat nomor tidak menutupi setengah layar).
-    - Lebar plat minimal 40 pixel dan tinggi minimal 15 pixel.
+    Mendukung deteksi langsung dari depan maupun sudut serong (samping kanan / samping kiri hingga 45°):
+    - Rasio aspek (width / height) minimal 1.10 dan maksimal 5.8.
+      (Plat yang diambil serong dari samping mengalami kompresi lebar secara perspektif sehingga rasio turun ke ~1.15 - 1.45).
+    - Telapak tangan vertikal (0.73) dan wajah manusia (0.94) tetap ditolak karena rasio < 1.10.
+    - Tinggi plat tidak boleh melebihi 50% tinggi frame.
+    - Lebar plat minimal 35 pixel dan tinggi minimal 15 pixel.
     """
     bw = x2 - x1
     bh = y2 - y1
     if bh <= 0 or bw <= 0:
         return False
     
-    aspect_ratio = bw / bh
-    # Plat nomor kendaraan Indonesia selalu persegi panjang horizontal
-    if aspect_ratio < 1.35 or aspect_ratio > 5.8:
+    aspect_ratio = bw / float(bh)
+    # Plat nomor kendaraan Indonesia (lurus maupun serong samping)
+    if aspect_ratio < 1.10 or aspect_ratio > 5.8:
         return False
     
     # Ukuran minimum pixel
-    if bw < 40 or bh < 15:
+    if bw < 35 or bh < 15:
         return False
         
-    # Plat nomor tidak mungkin menutupi lebih dari 45% tinggi frame
-    if frame_h > 0 and bh > (frame_h * 0.45):
+    # Plat nomor tidak mungkin menutupi lebih dari 50% tinggi frame
+    if frame_h > 0 and bh > (frame_h * 0.50):
         return False
 
-    # Plat nomor tidak mungkin menutupi lebih dari 95% lebar frame
-    if frame_w > 0 and bw > (frame_w * 0.95):
+    # Plat nomor tidak mungkin menutupi lebih dari 98% lebar frame
+    if frame_w > 0 and bw > (frame_w * 0.98):
         return False
 
     return True
@@ -184,8 +184,8 @@ def is_plausible_plate_box(x1: int, y1: int, x2: int, y2: int, frame_w: int = 64
 def extract_candidate_plate_boxes(yolo_boxes, frame_w: int = 640, frame_h: int = 480):
     """
     Mengekstrak dan memverifikasi kotak kandidat plat nomor yang valid:
-    1. Plat mobil / motor horizontal standar yang langsung lolos is_plausible_plate_box.
-    2. Plat nomor motor yang menyatu dengan spatbor belakang (rasio aspek 0.60 - 1.35).
+    1. Plat mobil / motor horizontal standar (depan atau serong) yang lolos is_plausible_plate_box.
+    2. Plat nomor motor yang terdeteksi bersama spatbor belakang (rasio aspek 0.50 - 1.35).
        Plat nomor motor berada di ~52% bagian atas dari bingkai dudukan tersebut.
     Mengembalikan daftar kandidat terurut confidence: ([x1, y1, x2, y2], conf, kind)
     """
@@ -212,19 +212,22 @@ def extract_candidate_plate_boxes(yolo_boxes, frame_w: int = 640, frame_h: int =
             continue
         ar = bw / float(bh)
 
-        # 1. Plat horizontal langsung (mobil / motor mandiri)
+        # 1. Plat horizontal langsung (mobil / motor mandiri, depan atau serong)
         if is_plausible_plate_box(x1, y1, x2, y2, frame_w=frame_w, frame_h=frame_h):
             candidates.append(([x1, y1, x2, y2], conf, "standard"))
             continue
 
-        # 2. Plat nomor motor yang terdeteksi bersama spatbor belakang (persegi/vertikal 0.60 - 1.35)
-        # Plat nomor motor berada di 52% bagian atas dari dudukan spatbor (rasio plat motor asli >= 1.6)
-        if 0.60 <= ar <= 1.35:
+        # 2. Plat nomor motor yang terdeteksi bersama spatbor belakang (persegi/vertikal 0.50 - 1.35)
+        # Plat nomor motor berada di 52% bagian atas dari dudukan spatbor (rasio plat motor asli >= 1.50)
+        if 0.50 <= ar <= 1.35:
             adj_bh = int(bh * 0.52)
             adj_y2 = y1 + adj_bh
             adj_ar = bw / float(adj_bh) if adj_bh > 0 else 0
-            if adj_ar >= 1.6 and is_plausible_plate_box(x1, y1, x2, adj_y2, frame_w=frame_w, frame_h=frame_h):
+            if adj_ar >= 1.50 and is_plausible_plate_box(x1, y1, x2, adj_y2, frame_w=frame_w, frame_h=frame_h):
                 candidates.append(([x1, y1, x2, adj_y2], conf, "motorcycle_adjusted"))
+
+    candidates.sort(key=lambda item: item[1], reverse=True)
+    return candidates
 
     candidates.sort(key=lambda item: item[1], reverse=True)
     return candidates

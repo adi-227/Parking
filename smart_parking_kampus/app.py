@@ -498,7 +498,7 @@ with tab_gate:
             if not is_model_available:
                 st.warning("⚠️ File model YOLO belum ditemukan. Gunakan mode 'Unggah Foto' atau 'Ketik Manual'.")
             else:
-                st.info("💡 **Arahkan kamera ke plat kendaraan**, lalu klik tombol ambil foto di bawah. Sangat cepat, tajam, dan anti-lag!")
+                st.info("💡 **Arahkan kamera ke plat kendaraan** (bisa posisi depan maupun serong samping kanan/kiri), lalu klik tombol ambil foto di bawah. Sangat cepat, tajam, dan anti-lag!")
                 cam_shot = st.camera_input("Arahkan kamera ke plat nomor kendaraan:", key="native_cam_input")
                 if cam_shot is not None:
                     file_bytes = np.asarray(bytearray(cam_shot.read()), dtype=np.uint8)
@@ -668,14 +668,14 @@ with tab_gate:
                             cv2.line(img, (vx2, vy2), (vx2 - c_len, vy2), c_color, 2)
                             cv2.line(img, (vx2, vy2), (vx2, vy2 - c_len), c_color, 2)
 
-                            guide_lbl = "Arahkan kamera ke plat kendaraan"
+                            guide_lbl = "Arahkan plat (depan / serong kanan / kiri)"
                             g_size = cv2.getTextSize(guide_lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)[0]
                             cv2.putText(img, guide_lbl, (cx - g_size[0] // 2, max(22, vy1 - 10)),
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, c_color, 1, cv2.LINE_AA)
 
                         return type(frame).from_ndarray(img, format="bgr24")
 
-                st.write("Arahkan kamera ke plat kendaraan:")
+                st.info("💡 **Dukungan Multi-Sudut Pos Gerbang**: Kamera dapat diarahkan lurus dari depan maupun **serong dari samping kanan/kiri** (hingga sudut 45°). AI otomatis meluruskan kemiringan plat!")
                 ctx = webrtc_streamer(
                     key="gate-camera-stream",
                     mode=WebRtcMode.SENDRECV,

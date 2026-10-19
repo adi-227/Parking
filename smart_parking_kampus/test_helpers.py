@@ -120,10 +120,14 @@ class TestParkingLogic(unittest.TestCase):
         self.assertFalse(is_plausible_plate_box(160, 150, 345, 403, 640, 480))
         # 4. Wajah manusia / kepala (lebar 150px, tinggi 160px -> rasio 0.94)
         self.assertFalse(is_plausible_plate_box(200, 100, 350, 260, 640, 480))
-        # 5. Kotak terlalu tinggi (menutupi > 45% tinggi layar kamera, misal bh=240 di 480h)
+        # 5. Kotak terlalu tinggi (menutupi > 50% tinggi layar kamera, misal bh=260 di 480h)
         self.assertFalse(is_plausible_plate_box(50, 50, 500, 310, 640, 480))
         # 6. Kotak noise terlalu kecil
         self.assertFalse(is_plausible_plate_box(10, 10, 25, 20, 640, 480))
+        # 7. Plat mobil serong samping kanan / kiri (rasio 1.30)
+        self.assertTrue(is_plausible_plate_box(100, 100, 230, 200, 640, 480))
+        # 8. Plat motor serong samping tajam ~45 derajat (rasio 1.15)
+        self.assertTrue(is_plausible_plate_box(100, 100, 215, 200, 640, 480))
 
     def test_extract_candidate_plate_boxes(self):
         # 1. Kotak plat mobil standar
@@ -147,6 +151,12 @@ class TestParkingLogic(unittest.TestCase):
         cands_p = extract_candidate_plate_boxes(palm_boxes, frame_w=640, frame_h=480)
         # Bounding box telapak tangan setelah disesuaikan tetap bukan proporsi plat kendaraan
         self.assertEqual(len(cands_p), 0)
+
+        # 4. Plat mobil serong samping kanan/kiri lolos deteksi
+        angled_boxes = [([100, 100, 230, 200], 0.85)]
+        cands_a = extract_candidate_plate_boxes(angled_boxes, frame_w=640, frame_h=480)
+        self.assertEqual(len(cands_a), 1)
+        self.assertEqual(cands_a[0][2], "standard")
 
     def test_format_duration(self):
         self.assertEqual(format_duration(0), "Kurang dari 1 menit")

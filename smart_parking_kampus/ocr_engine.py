@@ -35,13 +35,36 @@ def preprocess_plate_image(image: np.ndarray) -> np.ndarray:
     # 4. Sedikit gaussian blur untuk meredam artefak kompresi kamera
     denoised = cv2.GaussianBlur(enhanced, (3, 3), 0)
 
+    # 5. Deskewing sudut kemiringan (kamera di tiang samping pos parkir / serong)
+    try:
+        cur_h, cur_w = denoised.shape[:2]
+        edges = cv2.Canny(denoised, 50, 150)
+        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=28, minLineLength=max(25, int(cur_w * 0.15)), maxLineGap=12)
+        if lines is not None and len(lines) > 0:
+            angles = []
+            for l in lines:
+                coords = l[0] if len(l.shape) > 1 else l
+                x1, y1, x2, y2 = coords
+                dx, dy = x2 - x1, y2 - y1
+                if abs(dx) > 10:
+                    deg = np.degrees(np.arctan2(dy, dx))
+                    if abs(deg) <= 30:
+                        angles.append(deg)
+            if angles:
+                median_ang = float(np.median(angles))
+                if abs(median_ang) >= 2.0:
+                    M = cv2.getRotationMatrix2D((cur_w // 2, cur_h // 2), median_ang, 1.0)
+                    denoised = cv2.warpAffine(denoised, M, (cur_w, cur_h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+    except Exception:
+        pass
+
     return denoised
 
 
 def extract_plate_text(reader, crop_image: np.ndarray) -> Tuple[str, float, str]:
     """
     Mengekstrak teks dari area plat yang sudah di-crop secara cerdas:
-    - Menjalankan pra-pemrosesan kontras
+    - Menjalankan pra-pemrosesan kontras & auto-deskewing sudut serong
     - Mengeksekusi EasyOCR
     - Mengabaikan baris tanggal pajak / masa berlaku (misal '09.29') yang sering mendominasi confidence
     - Menggabungkan potongan karakter dari kiri ke kanan jika terpisah beberapa kotak
@@ -55,7 +78,7 @@ def extract_plate_text(reader, crop_image: np.ndarray) -> Tuple[str, float, str]
 
     processed = preprocess_plate_image(crop_image)
 
-    # 1. Coba baca pada gambar preprocessed
+    # 1. Coba baca pada gambar preprocessed (termasuk auto-deskewing kemiringan)
     results = reader.readtext(
         processed,
         detail=1,
@@ -63,14 +86,17 @@ def extract_plate_text(reader, crop_image: np.ndarray) -> Tuple[str, float, str]
         allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -.",
     )
 
-    # 2. Jika kosong, fallback langsung dengan gambar asli
-    if not results:
-        results = reader.readtext(
+    # 2. Cek apakah ada plat valid; jika belum, coba juga gambar asli (raw)
+    has_valid = any(is_valid_plate_pattern(disambiguate_plate(r[1])) for r in results) if results else False
+    if not has_valid:
+        raw_results = reader.readtext(
             crop_image,
             detail=1,
             paragraph=False,
             allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -.",
         )
+        if raw_results:
+            results = list(results) + list(raw_results)
 
     if not results:
         return "", 0.0, ""
