@@ -108,6 +108,41 @@ def is_valid_plate_pattern(value: Optional[str]) -> bool:
     return bool(re.match(pattern, norm))
 
 
+def is_plausible_plate_box(x1: int, y1: int, x2: int, y2: int, frame_w: int = 640, frame_h: int = 480) -> bool:
+    """
+    Memverifikasi secara geometris apakah bounding box masuk akal sebagai plat nomor kendaraan.
+    Plat nomor Indonesia memiliki bentuk persegi panjang horizontal:
+    - Rasio lebar terhadap tinggi (aspect ratio = width / height) minimal 1.35 dan maksimal 5.8.
+    - Telapak tangan, wajah, atau badan manusia memiliki aspect ratio < 1.25 (vertikal atau persegi)
+      sehingga PASTI ditolak sebagai plat kendaraan.
+    - Tinggi plat tidak boleh melebihi 45% tinggi frame (karena plat nomor tidak menutupi setengah layar).
+    - Lebar plat minimal 40 pixel dan tinggi minimal 15 pixel.
+    """
+    bw = x2 - x1
+    bh = y2 - y1
+    if bh <= 0 or bw <= 0:
+        return False
+    
+    aspect_ratio = bw / bh
+    # Plat nomor kendaraan Indonesia selalu persegi panjang horizontal
+    if aspect_ratio < 1.35 or aspect_ratio > 5.8:
+        return False
+    
+    # Ukuran minimum pixel
+    if bw < 40 or bh < 15:
+        return False
+        
+    # Plat nomor tidak mungkin menutupi lebih dari 45% tinggi frame
+    if frame_h > 0 and bh > (frame_h * 0.45):
+        return False
+
+    # Plat nomor tidak mungkin menutupi lebih dari 95% lebar frame
+    if frame_w > 0 and bw > (frame_w * 0.95):
+        return False
+
+    return True
+
+
 def format_duration(minutes: int) -> str:
     """Format durasi menit ke dalam teks bahasa Indonesia yang ramah."""
     if minutes < 1:

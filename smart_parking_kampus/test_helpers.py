@@ -8,6 +8,7 @@ from parking_logic import (
     format_plate_display,
     disambiguate_plate,
     is_valid_plate_pattern,
+    is_plausible_plate_box,
     format_duration,
     decide,
     rupiah,
@@ -96,6 +97,20 @@ class TestParkingLogic(unittest.TestCase):
         self.assertFalse(res["is_registered"])
         self.assertEqual(res["category"], "Bukan Plat Nomor")
         self.assertIn("Bukan plat kendaraan", res["decision"])
+
+    def test_is_plausible_plate_box(self):
+        # 1. Plat motor Indonesia valid (lebar 200px, tinggi 55px -> rasio 3.64)
+        self.assertTrue(is_plausible_plate_box(100, 100, 300, 155, 640, 480))
+        # 2. Plat mobil Indonesia valid (lebar 300px, tinggi 95px -> rasio 3.16)
+        self.assertTrue(is_plausible_plate_box(50, 150, 350, 245, 640, 480))
+        # 3. Telapak tangan dari foto user (lebar 185px, tinggi 253px -> rasio 0.73, vertikal)
+        self.assertFalse(is_plausible_plate_box(160, 150, 345, 403, 640, 480))
+        # 4. Wajah manusia / kepala (lebar 150px, tinggi 160px -> rasio 0.94)
+        self.assertFalse(is_plausible_plate_box(200, 100, 350, 260, 640, 480))
+        # 5. Kotak terlalu tinggi (menutupi > 45% tinggi layar kamera, misal bh=240 di 480h)
+        self.assertFalse(is_plausible_plate_box(50, 50, 500, 310, 640, 480))
+        # 6. Kotak noise terlalu kecil
+        self.assertFalse(is_plausible_plate_box(10, 10, 25, 20, 640, 480))
 
     def test_format_duration(self):
         self.assertEqual(format_duration(0), "Kurang dari 1 menit")
