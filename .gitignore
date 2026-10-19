@@ -1,0 +1,27 @@
+# Python virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache & compiled bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.cache
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary / scratch files
+scratch/
+tmp/
+*.tmp

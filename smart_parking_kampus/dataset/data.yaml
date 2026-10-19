@@ -1,0 +1,7 @@
+# Konfigurasi Dataset YOLO Plat Nomor Kampus
+path: C:/Users/randr/Downloads/smart_parking_kampus_v2/smart_parking_kampus/dataset
+train: images/train
+val: images/val
+
+names:
+  0: license_plate
