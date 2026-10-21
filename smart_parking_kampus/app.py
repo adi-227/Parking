@@ -1524,19 +1524,34 @@ with tab_gate:
                 )
 
             dur_mins = dec_result.get("duration_minutes", 0)
-            fee_note = ""
-            if "Tamu" in str(dec_result.get("category", "")):
-                if gate_code == "IN":
-                    fee_note = "<div style='font-size:0.75rem; color:var(--text-secondary);'>Tarif 1 Jam Pertama (+Rp2.000/jam)</div>"
-                elif dur_mins > 60:
-                    extra_h = (dur_mins - 1) // 60
-                    fee_note = f"<div style='font-size:0.75rem; color:var(--text-secondary);'>1 Jam Pertama (Rp3.000) + {extra_h} Jam x Rp2.000</div>"
+            if gate_code == "IN":
+                fee_title = "Biaya Masuk (Tiket):"
+                fee_disp = "Rp 0"
+                fee_color = "#059669"
+                if "Tamu" in str(dec_result.get("category", "")):
+                    fee_note = "<div style='font-size:0.75rem; color:var(--text-secondary);'>Bayar saat keluar (Tarif 1 Jam Pertama: Rp 3.000, berikutnya +Rp 2.000/jam)</div>"
+                elif "Mahasiswa" in str(dec_result.get("category", "")):
+                    fee_note = "<div style='font-size:0.75rem; color:var(--text-secondary);'>Bayar saat keluar (Tarif Flat Mahasiswa: Rp 2.000 seharian)</div>"
+                elif "Dosen" in str(dec_result.get("category", "")):
+                    fee_note = "<div style='font-size:0.75rem; color:#10b981;'>Akses Sivitas Akademika Bebas Biaya (Gratis)</div>"
                 else:
-                    fee_note = "<div style='font-size:0.75rem; color:var(--text-secondary);'>Tarif 1 Jam Pertama (<= 60 Menit)</div>"
-            elif "Mahasiswa" in str(dec_result.get("category", "")):
-                fee_note = "<div style='font-size:0.75rem; color:var(--text-secondary);'>Tarif Flat Subsidi Kampus (Seharian)</div>"
-            elif "Dosen" in str(dec_result.get("category", "")):
-                fee_note = "<div style='font-size:0.75rem; color:#10b981;'>Akses Sivitas Akademika Gratis</div>"
+                    fee_note = "<div style='font-size:0.75rem; color:var(--text-secondary);'>Bayar saat keluar</div>"
+            else:
+                fee_title = "Total Tagihan Parkir:"
+                fee_disp = rupiah(dec_result.get("fee"))
+                fee_color = "#2563eb"
+                if "Tamu" in str(dec_result.get("category", "")):
+                    if dur_mins > 60:
+                        extra_h = (dur_mins - 1) // 60
+                        fee_note = f"<div style='font-size:0.75rem; color:var(--text-secondary);'>1 Jam Pertama (Rp 3.000) + {extra_h} Jam x Rp 2.000 (Durasi: {dur_val})</div>"
+                    else:
+                        fee_note = f"<div style='font-size:0.75rem; color:var(--text-secondary);'>Tarif 1 Jam Pertama (Durasi: {dur_val} &le; 60 Menit)</div>"
+                elif "Mahasiswa" in str(dec_result.get("category", "")):
+                    fee_note = f"<div style='font-size:0.75rem; color:var(--text-secondary);'>Tarif Flat Subsidi Mahasiswa (Durasi: {dur_val})</div>"
+                elif "Dosen" in str(dec_result.get("category", "")):
+                    fee_note = "<div style='font-size:0.75rem; color:#10b981;'>Akses Sivitas Akademika Bebas Biaya (Gratis)</div>"
+                else:
+                    fee_note = ""
 
             # Kartu Tiket Digital Modern
             card_html = f"""
@@ -1555,7 +1570,7 @@ with tab_gate:
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 0.95rem;">
                     <div>👤 <b>Nama Pemilik:</b><br><span style="font-size:1.1rem; font-weight:700;">{dec_result.get('owner_name') or 'Tidak Valid'}</span></div>
                     <div>🏷️ <b>Kategori Civitas:</b><br><span style="font-size:1.1rem; font-weight:700;">{dec_result.get('category')}</span></div>
-                    <div>💵 <b>Total Biaya Parkir:</b><br><span style="font-size:1.45rem; font-weight:800; color:#2563eb;">{rupiah(dec_result.get('fee'))}</span>{fee_note}</div>
+                    <div>💵 <b>{fee_title}</b><br><span style="font-size:1.45rem; font-weight:800; color:{fee_color};">{fee_disp}</span>{fee_note}</div>
                     <div>🚪 <b>Aksi Gerbang:</b><br><span style="font-size:1.02rem; font-weight:700;">{gate_status_label}</span></div>
                     {extra_gate_info}
                 </div>
@@ -1583,7 +1598,7 @@ with tab_gate:
             btn_col1, btn_col2 = st.columns([3, 1])
             with btn_col1:
                 if gate_code == "IN":
-                    btn_open = st.button("🟢 BUKA GERBANG MASUK & CATAT TRANSAKSI", type="primary", use_container_width=True)
+                    btn_open = st.button("🟢 BUKA GERBANG MASUK & AMBIL TIKET (Rp 0)", type="primary", use_container_width=True)
                 else:
                     fee_txt = rupiah(dec_result.get("fee", 0))
                     btn_open = st.button(f"🔴 BUKA GERBANG KELUAR & SELESAI PARKIR ({fee_txt})", type="primary", use_container_width=True)
@@ -1619,11 +1634,15 @@ with tab_gate:
 
                 catatan_val = st.session_state.get("input_catatan_petugas", "")
 
+                # Saat masuk (IN), biaya aktual yang dicatat adalah Rp 0 (karcis masuk, belum bayar).
+                # Saat keluar (OUT), biaya ditagihkan sesuai durasi parkir & kategori.
+                fee_to_save = 0 if final_gate_code == "IN" else final_dec.get("fee", 0)
+
                 tx_id = db_manager.save_transaction(
                     plate=final_p,
                     owner_name=final_dec.get("owner_name"),
                     category=final_dec.get("category"),
-                    fee=final_dec.get("fee"),
+                    fee=fee_to_save,
                     decision=final_dec.get("decision"),
                     status="CONFIRMED",
                     gate_direction=final_gate_code,
@@ -2154,7 +2173,10 @@ with tab_history:
         if filtered_tx:
             for item in filtered_tx:
                 raw_fee = item.get("fee")
-                item["fee_display"] = rupiah(raw_fee)
+                if item.get("gate_direction") == "IN":
+                    item["fee_display"] = "Rp 0 (Tiket Masuk)"
+                else:
+                    item["fee_display"] = rupiah(raw_fee)
                 dur = item.get("duration_minutes")
                 if item.get("gate_direction") == "OUT" and dur is not None and dur > 0:
                     item["duration_text"] = format_duration(dur)

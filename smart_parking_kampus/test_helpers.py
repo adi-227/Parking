@@ -462,6 +462,42 @@ class TestDatabaseManager(unittest.TestCase):
         self.assertEqual(updated["gate_direction"], "OUT")
         self.assertEqual(updated["notes"], "Updated note")
 
+    def test_tamu_parking_single_charge_workflow(self):
+        # 1. Tamu masuk gerbang IN -> dicatat dengan fee=0 (tiket masuk)
+        in_id = db_manager.save_transaction(
+            plate="B 6006 JPR",
+            owner_name="(Tamu / Luar Kampus)",
+            category="Tamu",
+            fee=0,
+            decision="KENDARAAN TAMU MASUK — TIKET TERCETAK",
+            status="CONFIRMED",
+            gate_direction="IN",
+            notes="Tiket Masuk",
+            db_path=self.db_path
+        )
+        self.assertIsNotNone(in_id)
+        self.assertEqual(db_manager.get_currently_parked_count(db_path=self.db_path), 1)
+
+        # Revenue saat baru masuk harus Rp 0
+        metrics_in = db_manager.get_dashboard_metrics(db_path=self.db_path)
+        self.assertEqual(metrics_in["total_revenue"], 0)
+
+        # 2. Tamu checkout keluar (OUT) setelah 1 menit (<= 60 menit)
+        out_id = db_manager.checkout_vehicle("B 6006 JPR", db_path=self.db_path)
+        self.assertIsNotNone(out_id)
+        self.assertEqual(db_manager.get_currently_parked_count(db_path=self.db_path), 0)
+
+        # Revenue total harus HANYA Rp 3.000 (tidak double charge 3k + 3k = 6k)
+        metrics_out = db_manager.get_dashboard_metrics(db_path=self.db_path)
+        self.assertEqual(metrics_out["total_revenue"], 3000)
+
+        # Cek detail transaksi OUT
+        txs = db_manager.list_transactions(plate_filter="B 6006 JPR", db_path=self.db_path)
+        self.assertEqual(len(txs), 2)
+        out_tx = [t for t in txs if t["gate_direction"] == "OUT"][0]
+        self.assertEqual(out_tx["fee"], 3000)
+        self.assertEqual(out_tx["duration_minutes"], 0)
+
 
 class TestDatasetValidator(unittest.TestCase):
     def test_validate_annotation_line(self):

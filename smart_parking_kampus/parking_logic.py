@@ -452,7 +452,7 @@ def decide(
             else:
                 decision = f"TAMU KELUAR GERBANG — WAJIB BAYAR {rupiah(fee)}"
         else:
-            decision = f"KENDARAAN TAMU MASUK — TIKET TERCETAK (TARIF {rupiah(fee)} / 1 JAM PERTAMA)"
+            decision = f"KENDARAAN TAMU MASUK — TIKET TERCETAK (TARIF {rupiah(fee)} / 1 JAM PERTAMA, BAYAR SAAT KELUAR)"
 
         return {
             "plate": display_plate,
@@ -485,7 +485,7 @@ def decide(
         if fee == 0:
             decision = "DOSEN TERDAFTAR — PARKIR GRATIS"
         else:
-            decision = f"{category.upper()} TERDAFTAR — TARIF FLAT {rupiah(fee)}"
+            decision = f"{category.upper()} TERDAFTAR — TIKET MASUK (TARIF FLAT {rupiah(fee)}, BAYAR SAAT KELUAR)"
 
     return {
         "plate": registered_plate,

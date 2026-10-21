@@ -81,6 +81,9 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
         if "entry_time" not in tx_cols:
             conn.execute("ALTER TABLE transactions ADD COLUMN entry_time TEXT")
 
+        # Koreksi migrasi: pastikan seluruh sesi masuk (IN) tercatat fee = 0 (karcis masuk, ditagih saat OUT)
+        conn.execute("UPDATE transactions SET fee = 0 WHERE gate_direction = 'IN' AND fee > 0")
+
 
 def upsert_vehicle(plate: str, owner_name: str, category: str, db_path: str = DEFAULT_DB_PATH) -> Tuple[bool, str]:
     """
