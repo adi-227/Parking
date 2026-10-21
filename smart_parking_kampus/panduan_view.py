@@ -38,11 +38,11 @@ def render_panduan_ai(status: Optional[Dict[str, bool]] = None):
 :root {{
     --guide-bg: var(--background-color, #0E1117);
     --guide-card-bg: var(--secondary-background-color, #161B26);
-    --guide-card-border: rgba(128, 128, 128, 0.2);
+    --guide-card-border: var(--border-color, rgba(128, 128, 128, 0.2));
     --guide-accent-blue: #2563EB;
     --guide-hover-blue: #1D4ED8;
     --guide-text-primary: var(--text-color, #F3F4F6);
-    --guide-text-secondary: rgba(128, 128, 128, 0.85);
+    --guide-text-secondary: var(--text-secondary, #64748B);
     --guide-success-green: #10B981;
     --guide-success-bg: rgba(16, 185, 129, 0.15);
     --guide-gold: #D97706;
