@@ -156,21 +156,214 @@ st.markdown(f"""
     }}
     section[data-testid="stSidebar"] p,
     section[data-testid="stSidebar"] label,
-    section[data-testid="stSidebar"] div,
     section[data-testid="stSidebar"] li,
     section[data-testid="stSidebar"] h1,
     section[data-testid="stSidebar"] h2,
     section[data-testid="stSidebar"] h3,
     section[data-testid="stSidebar"] h4,
-    section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
-    section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] span {{
+    section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {{
         color: var(--text-primary) !important;
     }}
-    section[data-testid="stSidebar"] span:not(.badge-status) {{
+    section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] span:not([class*="sb-"]):not(.badge-status) {{
+        color: var(--text-primary) !important;
+    }}
+    section[data-testid="stSidebar"] span:not(.badge-status):not([class*="sb-"]) {{
         color: var(--text-primary) !important;
     }}
     section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {{
         color: var(--text-secondary) !important;
+    }}
+
+    /* SIDEBAR KARTU CONTAINER (BORDERED CARDS) */
+    section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {{
+        border-radius: 14px !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.12) !important;
+        background-color: var(--bg-card) !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+        padding: 14px 14px 16px 14px !important;
+        margin-bottom: 14px !important;
+    }}
+
+    section[data-testid="stSidebar"] h4 {{
+        margin: 0 0 12px 0 !important;
+        font-size: 1.02rem !important;
+        font-weight: 800 !important;
+        color: #F8FAFC !important;
+        letter-spacing: 0.2px !important;
+    }}
+
+    /* Selectbox Sidebar Modern */
+    section[data-testid="stSidebar"] [data-baseweb="select"] {{
+        width: 100% !important;
+    }}
+    section[data-testid="stSidebar"] [data-baseweb="select"] > div {{
+        background-color: #0E1117 !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.18) !important;
+        border-radius: 10px !important;
+        font-size: 0.88rem !important;
+    }}
+
+    /* Status Box / Pill di Sidebar */
+    .sb-status-box {{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 9px 12px;
+        border-radius: 10px;
+        font-size: 0.88rem;
+        font-weight: 700;
+        margin-top: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }}
+    .sb-status-success {{
+        background: rgba(16, 185, 129, 0.16) !important;
+        border: 1.5px solid rgba(16, 185, 129, 0.45) !important;
+        color: #34D399 !important;
+    }}
+    .sb-status-success * {{
+        color: #34D399 !important;
+    }}
+    .sb-status-warning {{
+        background: rgba(245, 158, 11, 0.16) !important;
+        border: 1.5px solid rgba(245, 158, 11, 0.45) !important;
+        color: #FBBF24 !important;
+    }}
+    .sb-status-warning * {{
+        color: #FBBF24 !important;
+    }}
+    .sb-status-danger {{
+        background: rgba(239, 68, 68, 0.16) !important;
+        border: 1.5px solid rgba(239, 68, 68, 0.45) !important;
+        color: #F87171 !important;
+    }}
+    .sb-status-danger * {{
+        color: #F87171 !important;
+    }}
+    .sb-status-dot {{
+        width: 8px;
+        height: 8px;
+        background-color: #34D399;
+        border-radius: 50%;
+        display: inline-block;
+        box-shadow: 0 0 10px #34D399;
+    }}
+
+    /* Kapasitas Progress Bar */
+    .sb-capacity-wrap {{
+        margin: 6px 0 10px 0;
+    }}
+    .sb-cap-meta {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.86rem;
+        margin-bottom: 6px;
+    }}
+    .sb-cap-label {{
+        color: #94A3B8 !important;
+        font-weight: 500;
+    }}
+    .sb-cap-val {{
+        color: #F8FAFC !important;
+        font-weight: 700;
+    }}
+    .sb-progress-bg {{
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 999px;
+        height: 8px;
+        overflow: hidden;
+    }}
+    .sb-progress-fill {{
+        background: linear-gradient(90deg, #3B82F6 0%, #10B981 100%);
+        height: 100%;
+        border-radius: 999px;
+        transition: width 0.3s ease;
+    }}
+
+    /* Kartu Tarif Parkir */
+    .sb-tariff-container {{
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 4px;
+    }}
+    .sb-tariff-item {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 9px;
+        padding: 8px 10px;
+    }}
+    .sb-tariff-left {{
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }}
+    .sb-tariff-icon {{
+        font-size: 1.05rem;
+    }}
+    .sb-tariff-name {{
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #E2E8F0 !important;
+    }}
+    .sb-tariff-badge-free {{
+        background: rgba(16, 185, 129, 0.18) !important;
+        color: #34D399 !important;
+        border: 1px solid rgba(16, 185, 129, 0.35);
+        border-radius: 6px;
+        padding: 2px 8px;
+        font-size: 0.80rem;
+        font-weight: 700;
+    }}
+    .sb-tariff-badge-flat {{
+        background: rgba(59, 130, 246, 0.18) !important;
+        color: #60A5FA !important;
+        border: 1px solid rgba(59, 130, 246, 0.35);
+        border-radius: 6px;
+        padding: 2px 8px;
+        font-size: 0.80rem;
+        font-weight: 700;
+    }}
+    .sb-tariff-item-guest {{
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 9px;
+        padding: 8px 10px;
+    }}
+    .sb-guest-header {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+    }}
+    .sb-tariff-badge-guest {{
+        background: rgba(245, 158, 11, 0.18) !important;
+        color: #FBBF24 !important;
+        border: 1px solid rgba(245, 158, 11, 0.35);
+        border-radius: 6px;
+        padding: 2px 7px;
+        font-size: 0.76rem;
+        font-weight: 700;
+    }}
+    .sb-guest-body {{
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+        padding-top: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        font-size: 0.82rem;
+    }}
+    .sb-guest-row {{
+        display: flex;
+        justify-content: space-between;
+        color: #94A3B8 !important;
+    }}
+    .sb-guest-row b {{
+        color: #F8FAFC !important;
     }}
 
     /* ==========================================================================
@@ -793,48 +986,112 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# SIDEBAR: KONTROL OPERASIONAL GERBANG
+# SIDEBAR: KONTROL OPERASIONAL GERBANG (KARTU MODERN & RAPI)
 # ==============================================================================
 with st.sidebar:
-    st.header("🏢 Pos Gerbang Parkir")
-    
-    gate_dir_mode = st.selectbox(
-        "Mode Gerbang",
-        [
-            "🤖 Otomatis (Cerdas Masuk / Keluar)",
-            "🟢 Khusus Pos Masuk (IN)",
-            "🔴 Khusus Pos Keluar (OUT)",
-        ],
-        help="Mode Otomatis akan mengecek database: jika kendaraan belum di dalam kampus maka otomatis MASUK, jika sudah di dalam maka otomatis KELUAR dan hitung durasi."
-    )
+    with st.container(border=True):
+        st.markdown("#### 🏢 Pos Gerbang Parkir")
+        gate_dir_mode = st.selectbox(
+            "Mode Gerbang",
+            [
+                "🤖 Otomatis (Masuk & Keluar)",
+                "🟢 Khusus Pos Masuk (IN)",
+                "🔴 Khusus Pos Keluar (OUT)",
+            ],
+            help="Mode Otomatis akan mengecek database: jika kendaraan belum di dalam kampus maka otomatis MASUK, jika sudah di dalam maka otomatis KELUAR dan hitung durasi."
+        )
 
-    if is_model_available:
-        st.success("✅ Model YOLO Aktif")
-    else:
-        st.warning("⚠️ Model Belum Terpasang")
+        if is_model_available:
+            st.markdown("""
+            <div class="sb-status-box sb-status-success">
+                <span class="sb-status-dot"></span>
+                <span>Model YOLO Aktif</span>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div class="sb-status-box sb-status-warning">
+                <span>⚠️</span>
+                <span>Model Belum Terpasang</span>
+            </div>
+            """, unsafe_allow_html=True)
 
-    st.divider()
-    st.subheader("🅿️ Kapasitas Slot Parkir")
-    st.progress(pct_used)
-    st.write(f"Terisi: **{parked_now}** / {total_slots} Kendaraan")
-    if available_slots > 15:
-        st.success(f"🟢 Sisa: **{available_slots} Slot Tersedia**")
-    elif available_slots > 0:
-        st.warning(f"🟡 Hampir Penuh: Sisa **{available_slots} Slot**")
-    else:
-        st.error("🔴 PARKIR PENUH (0 Slot)")
+    with st.container(border=True):
+        st.markdown("#### 🅿️ Kapasitas Slot Parkir")
+        st.markdown(f"""
+        <div class="sb-capacity-wrap">
+            <div class="sb-cap-meta">
+                <span class="sb-cap-label">Status Terisi</span>
+                <span class="sb-cap-val"><b>{parked_now}</b> / {total_slots} Kendaraan</span>
+            </div>
+            <div class="sb-progress-bg">
+                <div class="sb-progress-fill" style="width: {max(3, int(pct_used * 100))}%;"></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    st.divider()
-    st.subheader("💰 Tarif Parkir Resmi")
-    st.markdown("""
-    - **👨‍🏫 Dosen**: Gratis (Rp 0)
-    - **🎓 Mahasiswa**: Rp 2.000 *(Flat Seharian)*
-    - **🚗 Tamu / Umum**:
-      - 1 Jam Pertama: **Rp 3.000**
-      - Jam Berikutnya: **+Rp 2.000 / jam**
-    """)
+        if available_slots > 15:
+            st.markdown(f"""
+            <div class="sb-status-box sb-status-success">
+                <span class="sb-status-dot"></span>
+                <span>Sisa: <b>{available_slots} Slot Tersedia</b></span>
+            </div>
+            """, unsafe_allow_html=True)
+        elif available_slots > 0:
+            st.markdown(f"""
+            <div class="sb-status-box sb-status-warning">
+                <span>🟡</span>
+                <span>Hampir Penuh: <b>Sisa {available_slots} Slot</b></span>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div class="sb-status-box sb-status-danger">
+                <span>🔴</span>
+                <b>PARKIR PENUH (0 Slot)</b>
+            </div>
+            """, unsafe_allow_html=True)
 
-    st.divider()
+    with st.container(border=True):
+        st.markdown("#### 💰 Tarif Parkir Resmi")
+        st.markdown("""
+        <div class="sb-tariff-container">
+            <div class="sb-tariff-item">
+                <div class="sb-tariff-left">
+                    <span class="sb-tariff-icon">👨‍🏫</span>
+                    <span class="sb-tariff-name">Dosen</span>
+                </div>
+                <span class="sb-tariff-badge-free">Gratis (Rp 0)</span>
+            </div>
+            <div class="sb-tariff-item">
+                <div class="sb-tariff-left">
+                    <span class="sb-tariff-icon">🎓</span>
+                    <span class="sb-tariff-name">Mahasiswa</span>
+                </div>
+                <span class="sb-tariff-badge-flat">Rp 2.000 (Flat)</span>
+            </div>
+            <div class="sb-tariff-item-guest">
+                <div class="sb-guest-header">
+                    <div class="sb-tariff-left">
+                        <span class="sb-tariff-icon">🚗</span>
+                        <span class="sb-tariff-name">Tamu / Umum</span>
+                    </div>
+                    <span class="sb-tariff-badge-guest">Per Jam</span>
+                </div>
+                <div class="sb-guest-body">
+                    <div class="sb-guest-row">
+                        <span>1 Jam Pertama</span>
+                        <b>Rp 3.000</b>
+                    </div>
+                    <div class="sb-guest-row">
+                        <span>Jam Berikutnya</span>
+                        <b>+Rp 2.000 / jam</b>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
     with st.expander("⚙️ Parameter Teknis & AI (Lanjutan)", expanded=False):
         st.caption("Pengaturan teknis ini sudah dioptimalkan secara default:")
         model_path_input = st.text_input("Path Model YOLO", value=DEFAULT_MODEL_PATH)
