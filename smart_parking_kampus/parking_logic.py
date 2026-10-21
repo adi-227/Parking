@@ -209,7 +209,7 @@ def is_plausible_plate_box(x1: int, y1: int, x2: int, y2: int, frame_w: int = 64
     return True
 
 
-def extract_candidate_plate_boxes(yolo_boxes, frame_w: int = 640, frame_h: int = 480):
+def extract_candidate_plate_boxes(yolo_boxes, frame_w: int = 640, frame_h: int = 480, min_conf: float = 0.30):
     """
     Mengekstrak dan memverifikasi kotak kandidat plat nomor yang valid:
     1. Plat mobil / motor horizontal standar (depan atau serong) yang lolos is_plausible_plate_box.
@@ -232,6 +232,9 @@ def extract_candidate_plate_boxes(yolo_boxes, frame_w: int = 640, frame_h: int =
             else:
                 continue
         else:
+            continue
+
+        if conf < min_conf:
             continue
 
         bw = x2 - x1
@@ -285,13 +288,13 @@ class SmoothBoxTracker:
     Pelacak bounding box temporal untuk kamera real-time:
     1. EMA (Exponential Moving Average) smoothing untuk koordinat [x1, y1, x2, y2]
        agar kotak tidak bergetar / jitter saat kamera sedikit bergerak.
-    2. IoU / Spatial Proximity matching ketika ada beberapa kandidat deteksi,
-       mencegah kotak melompat-lompat antar kandidat (misal standard vs adjusted).
-    3. Hysteresis / Persistence (grace period): Jika deteksi terlewat 1-6 frame
-       karena motion blur atau variasi cahaya sesaat, kotak tidak langsung lenyap (flicker).
+    2. Spatial locking & Anti-Jumping: Mencegah kotak melompat liar / mental-mental
+       ketika ada beberapa objek berbeda di layar.
+    3. Hysteresis (grace period): Jika deteksi terlewat sesaat karena motion blur,
+       posisi kotak tetap dipertahankan stabil di posisi terakhir.
     """
 
-    def __init__(self, alpha: float = 0.65, max_miss_frames: int = 8):
+    def __init__(self, alpha: float = 0.65, max_miss_frames: int = 6):
         self.alpha = float(alpha)
         self.max_miss_frames = int(max_miss_frames)
         self.current_box: Optional[Tuple[int, int, int, int]] = None
@@ -311,9 +314,6 @@ class SmoothBoxTracker:
                 return None
             return self.get_box()
 
-        # Pilih kandidat terbaik:
-        # Jika sudah ada box yang sedang dilacak, cari kandidat dengan IoU tertinggi
-        # untuk menjaga kontinuitas tracking.
         best_box = None
         if self.current_box is not None:
             best_iou = -1.0
@@ -325,17 +325,28 @@ class SmoothBoxTracker:
                     best_iou = iou
                     best_cand_box = cand_box
 
-            # Jika IoU memadai (> 0.15), gunakan kandidat terdekat tersebut
+            # Jika kandidat memiliki overlap spasial yang cukup (> 0.15) dengan box yang sedang dilacak,
+            # pertahankan pelacakan objek ini dengan EMA smoothing (anti-jitter)
             if best_iou > 0.15 and best_cand_box is not None:
                 best_box = best_cand_box
+                self.miss_count = 0
             else:
-                first = candidates[0]
-                best_box = first[0] if isinstance(first, (list, tuple)) else first
+                # Objek baru berada di lokasi berbeda! Jangan langsung tarik kotak melintasi layar!
+                self.miss_count += 1
+                if self.miss_count <= self.max_miss_frames:
+                    # Pertahankan posisi kotak yang lama agar tidak mental-mental
+                    return self.get_box()
+                else:
+                    # Objek lama sudah hilang, switch ke target baru dan reset smoothing
+                    first = candidates[0]
+                    best_box = first[0] if isinstance(first, (list, tuple)) else first
+                    self.smoothed_box = None
+                    self.miss_count = 0
         else:
             first = candidates[0]
             best_box = first[0] if isinstance(first, (list, tuple)) else first
+            self.miss_count = 0
 
-        self.miss_count = 0
         self.current_box = (int(best_box[0]), int(best_box[1]), int(best_box[2]), int(best_box[3]))
 
         if self.smoothed_box is None:

@@ -1097,7 +1097,7 @@ with st.sidebar:
         model_path_input = st.text_input("Path Model YOLO", value=DEFAULT_MODEL_PATH)
         is_model_available = os.path.isfile(model_path_input)
         
-        conf_threshold = st.slider("Confidence YOLO", 0.10, 0.90, 0.30, 0.05)
+        conf_threshold = st.slider("Confidence YOLO", 0.15, 0.90, 0.40, 0.05)
         ocr_min_conf = st.slider("Confidence Min OCR", 0.15, 0.80, 0.25, 0.05)
         frame_skip = st.slider("Frekuensi Frame (Webcam)", 2, 16, 3, 1)
         cooldown_sec = st.number_input("Cooldown Duplikasi (detik)", 10, 600, 60, 10)
@@ -1235,7 +1235,7 @@ with tab_gate:
                     with st.spinner("AI sedang membaca plat nomor dari foto..."):
                         from ocr_engine import extract_plate_text
                         model, reader = get_yolo_and_ocr(DEFAULT_MODEL_PATH)
-                        eff_conf = min(conf_threshold, 0.25)
+                        eff_conf = max(0.35, min(conf_threshold, 0.50))
                         preds = model.predict(source=img_cv, conf=eff_conf, verbose=False, imgsz=640)
                         ih, iw = img_cv.shape[:2]
                         candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=iw, frame_h=ih)
@@ -1306,7 +1306,8 @@ with tab_gate:
                         if self.frame_count % step == 0:
                             cands = []
                             try:
-                                preds = model.predict(source=img, conf=0.25, verbose=False, imgsz=480)
+                                eff_live_conf = max(0.40, conf_threshold)
+                                preds = model.predict(source=img, conf=eff_live_conf, verbose=False, imgsz=480)
                                 if preds and len(preds[0].boxes) > 0:
                                     cands = extract_candidate_plate_boxes(preds[0].boxes, frame_w=w, frame_h=h)
                             except Exception:
@@ -1324,8 +1325,8 @@ with tab_gate:
                             # Kotak hijau neon dinamis yang presisi & stabil mengikuti plat nomor
                             cv2.rectangle(img, (x1, y1), (x2, y2), (0, 240, 0), 3)
 
-                            # Badge status "PLAT TERDETEKSI" di atas kotak
-                            badge_text = "PLAT TERDETEKSI (KLIK SCAN)"
+                            # Badge status bidik plat di atas kotak
+                            badge_text = "BIDIK PLAT (KLIK SCAN)"
                             t_size = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)[0]
                             bg_y1 = max(0, y1 - 28)
                             bg_y2 = y1
@@ -1379,7 +1380,7 @@ with tab_gate:
                     if snap is not None:
                         with st.spinner("AI sedang memeriksa plat nomor kendaraan..."):
                             sh, sw = snap.shape[:2]
-                            eff_conf = min(conf_threshold, 0.25)
+                            eff_conf = max(0.35, min(conf_threshold, 0.50))
                             preds = model.predict(source=snap, conf=eff_conf, verbose=False, imgsz=640)
                             candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=sw, frame_h=sh)
                             if not candidates and last_tracked:
