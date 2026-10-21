@@ -55,69 +55,35 @@ st.set_page_config(
 db_manager.init_db()
 
 # ==============================================================================
-# TEMA & GAYA VISUAL (ADAPTIVE LIGHT & DARK THEME — PREMIUM CAMPUS DASHBOARD)
+# TEMA & GAYA VISUAL (PREMIUM DARK THEME — CAMPUS DASHBOARD)
 # ==============================================================================
-if "app_theme" not in st.session_state:
-    st.session_state["app_theme"] = "Dark"
-
-is_dark = (st.session_state.get("app_theme", "Dark") == "Dark")
-
-if is_dark:
-    theme_vars = """
-        --bg-canvas: #0E1117;
-        --bg-card: #161B26;
-        --bg-card-hover: #1E2433;
-        --bg-sidebar: #11151F;
-        --border-color: rgba(255, 255, 255, 0.14);
-        --border-card: rgba(255, 255, 255, 0.18);
-        --text-primary: #F8FAFC;
-        --text-secondary: #94A3B8;
-        --text-muted: #64748B;
-        --tab-list-bg: #161B26;
-        --tab-bg-inactive: #11151F;
-        --tab-border-inactive: rgba(255, 255, 255, 0.14);
-        --tab-text-inactive: #E2E8F0;
-        --input-bg: #161B26;
-        --input-text: #F8FAFC;
-        --input-border: rgba(255, 255, 255, 0.2);
-        --alert-info-bg: rgba(30, 58, 138, 0.25);
-        --alert-info-text: #93C5FD;
-        --alert-info-border: rgba(59, 130, 246, 0.4);
-        --alert-success-bg: rgba(16, 185, 129, 0.15);
-        --alert-success-text: #6EE7B7;
-        --alert-success-border: rgba(16, 185, 129, 0.4);
-        --alert-warning-bg: rgba(245, 158, 11, 0.15);
-        --alert-warning-text: #FDE68A;
-        --alert-warning-border: rgba(245, 158, 11, 0.4);
-    """
-else:
-    theme_vars = """
-        --bg-canvas: #F8FAFC;
-        --bg-card: #FFFFFF;
-        --bg-card-hover: #F1F5F9;
-        --bg-sidebar: #FFFFFF;
-        --border-color: #CBD5E1;
-        --border-card: #94A3B8;
-        --text-primary: #0F172A;
-        --text-secondary: #334155;
-        --text-muted: #64748B;
-        --tab-list-bg: #F1F5F9;
-        --tab-bg-inactive: #FFFFFF;
-        --tab-border-inactive: #CBD5E1;
-        --tab-text-inactive: #0F172A;
-        --input-bg: #FFFFFF;
-        --input-text: #0F172A;
-        --input-border: #94A3B8;
-        --alert-info-bg: #EFF6FF;
-        --alert-info-text: #1E3A8A;
-        --alert-info-border: #93C5FD;
-        --alert-success-bg: #F0FDF4;
-        --alert-success-text: #14532D;
-        --alert-success-border: #86EFAC;
-        --alert-warning-bg: #FFFBEB;
-        --alert-warning-text: #78350F;
-        --alert-warning-border: #FCD34D;
-    """
+theme_vars = """
+    --bg-canvas: #0E1117;
+    --bg-card: #161B26;
+    --bg-card-hover: #1E2433;
+    --bg-sidebar: #11151F;
+    --border-color: rgba(255, 255, 255, 0.14);
+    --border-card: rgba(255, 255, 255, 0.18);
+    --text-primary: #F8FAFC;
+    --text-secondary: #94A3B8;
+    --text-muted: #64748B;
+    --tab-list-bg: #161B26;
+    --tab-bg-inactive: #11151F;
+    --tab-border-inactive: rgba(255, 255, 255, 0.14);
+    --tab-text-inactive: #E2E8F0;
+    --input-bg: #161B26;
+    --input-text: #F8FAFC;
+    --input-border: rgba(255, 255, 255, 0.2);
+    --alert-info-bg: rgba(30, 58, 138, 0.25);
+    --alert-info-text: #93C5FD;
+    --alert-info-border: rgba(59, 130, 246, 0.4);
+    --alert-success-bg: rgba(16, 185, 129, 0.15);
+    --alert-success-text: #6EE7B7;
+    --alert-success-border: rgba(16, 185, 129, 0.4);
+    --alert-warning-bg: rgba(245, 158, 11, 0.15);
+    --alert-warning-text: #FDE68A;
+    --alert-warning-border: rgba(245, 158, 11, 0.4);
+"""
 
 st.markdown(f"""
 <style>
@@ -830,22 +796,6 @@ st.markdown(f"""
 # SIDEBAR: KONTROL OPERASIONAL GERBANG
 # ==============================================================================
 with st.sidebar:
-    st.markdown("### 🌓 Mode Tampilan Web")
-    curr_theme = st.session_state.get("app_theme", "Dark")
-    theme_choice = st.radio(
-        "Pilih Tema:",
-        ["🌙 Gelap (Dark)", "☀️ Terang (Light)"],
-        index=0 if curr_theme == "Dark" else 1,
-        horizontal=True,
-        label_visibility="collapsed",
-        key="sidebar_theme_toggle_radio",
-    )
-    new_theme = "Light" if "Terang" in theme_choice else "Dark"
-    if new_theme != curr_theme:
-        st.session_state["app_theme"] = new_theme
-        st.rerun()
-
-    st.divider()
     st.header("🏢 Pos Gerbang Parkir")
     
     gate_dir_mode = st.selectbox(
@@ -1007,7 +957,6 @@ with tab_gate:
             "Pilih Metode Deteksi:",
             [
                 "⚡ Kamera Cepat (Snapshot 1-Klik)",
-                "📁 Unggah Foto Kendaraan",
                 "⌨️ Ketik Plat Manual",
                 "📹 Kamera Live (Streaming WebRTC)",
             ],
@@ -1018,7 +967,7 @@ with tab_gate:
         # METODE 1: KAMERA SNAPSHOT (NATIVE BROWSER HTML5 - 60 FPS, 0% LAG)
         if mode_input == "⚡ Kamera Cepat (Snapshot 1-Klik)":
             if not is_model_available:
-                st.warning("⚠️ File model YOLO belum ditemukan. Gunakan mode 'Unggah Foto' atau 'Ketik Manual'.")
+                st.warning("⚠️ File model YOLO belum ditemukan. Gunakan mode 'Ketik Plat Manual' atau pasang model YOLO.")
             else:
                 st.info("💡 **Arahkan kamera ke plat kendaraan** (bisa posisi depan maupun serong samping kanan/kiri), lalu klik tombol ambil foto di bawah. Sangat cepat, tajam, dan anti-lag!")
                 cam_shot = st.camera_input("Arahkan kamera ke plat nomor kendaraan:", key="native_cam_input")
@@ -1057,49 +1006,7 @@ with tab_gate:
                             st.session_state["current_source"] = "Bukan Kendaraan"
                             st.rerun()
 
-        # METODE 2: UNGGAH FOTO
-        elif mode_input == "📁 Unggah Foto Kendaraan":
-            st.info("💡 Unggah foto bagian depan / belakang mobil atau motor:")
-            uploaded_file = st.file_uploader("Pilih file foto (JPG/PNG)", type=["jpg", "jpeg", "png"], key="gate_photo_upload")
-            if uploaded_file is not None:
-                file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-                img_cv = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-                st.image(cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB), caption="Foto Kendaraan", use_container_width=True)
-
-                if st.button("🔍 Deteksi & Baca Plat Nomor", type="primary", use_container_width=True):
-                    with st.spinner("AI menganalisis gambar kendaraan..."):
-                        from ocr_engine import extract_plate_text
-                        found = []
-                        ih, iw = img_cv.shape[:2]
-                        if is_model_available:
-                            model, reader = get_yolo_and_ocr(DEFAULT_MODEL_PATH)
-                            eff_conf = min(conf_threshold, 0.25)
-                            preds = model.predict(source=img_cv, conf=eff_conf, verbose=False, imgsz=640)
-                            candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=iw, frame_h=ih)
-                            for box, box_conf, kind in candidates:
-                                x1, y1, x2, y2 = box
-                                crop = img_cv[max(0, y1):min(ih, y2), max(0, x1):min(iw, x2)]
-                                if crop.size > 0:
-                                    t, c, _ = extract_plate_text(reader, crop)
-                                    if t:
-                                        cleaned = disambiguate_plate(t)
-                                        if is_valid_plate_pattern(cleaned):
-                                            found.append((cleaned, c))
-
-                        if found:
-                            best_t, best_c = max(found, key=lambda x: x[1])
-                            st.session_state["current_plate"] = best_t
-                            st.session_state["current_conf"] = best_c
-                            st.session_state["current_source"] = "Unggah Foto"
-                            st.toast(f"Plat terdeteksi: {best_t}", icon="✅")
-                            st.rerun()
-                        else:
-                            st.session_state["current_plate"] = "INVALID_PLATE"
-                            st.session_state["current_conf"] = 0.0
-                            st.session_state["current_source"] = "Bukan Kendaraan"
-                            st.rerun()
-
-        # METODE 3: KETIK MANUAL
+        # METODE 2: KETIK MANUAL
         elif mode_input == "⌨️ Ketik Plat Manual":
             st.info("💡 Gunakan jika plat nomor kotor/rusak dan tidak terbaca oleh AI:")
             manual_in = st.text_input("Ketik Nomor Plat Kendaraan", placeholder="Contoh: B 6802 JPN / F 4526 FCF")
@@ -1259,7 +1166,7 @@ with tab_gate:
                 <div style="font-size: 2.8rem; margin-bottom: 6px;">🚗 🔍</div>
                 <div class="empty-title">Menunggu Kendaraan di Pos Gerbang</div>
                 <div class="empty-sub">
-                    Gunakan kamera snapshot 1-klik, unggah foto, atau ketik plat di sebelah kiri.<br>
+                    Gunakan kamera snapshot 1-klik atau ketik plat di sebelah kiri.<br>
                     Sistem AI akan otomatis membaca plat nomor, memverifikasi status kampus, dan menentukan tarif parkir.
                 </div>
                 <div class="empty-pills">
