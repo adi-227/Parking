@@ -1228,40 +1228,48 @@ with tab_gate:
             else:
                 st.info("💡 **Arahkan kamera ke plat kendaraan** (bisa posisi depan maupun serong samping kanan/kiri), lalu klik tombol ambil foto di bawah. Sangat cepat, tajam, dan anti-lag!")
                 cam_shot = st.camera_input("Arahkan kamera ke plat nomor kendaraan:", key="native_cam_input")
-                if cam_shot is not None:
-                    file_bytes = np.asarray(bytearray(cam_shot.read()), dtype=np.uint8)
-                    img_cv = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+                
+                if cam_shot is None:
+                    st.session_state["last_processed_cam_hash"] = None
+                else:
+                    file_bytes = cam_shot.getvalue()
+                    import hashlib
+                    curr_hash = hashlib.md5(file_bytes).hexdigest()
 
-                    with st.spinner("AI sedang membaca plat nomor dari foto..."):
-                        from ocr_engine import extract_plate_text
-                        model, reader = get_yolo_and_ocr(DEFAULT_MODEL_PATH)
-                        eff_conf = max(0.35, min(conf_threshold, 0.50))
-                        preds = model.predict(source=img_cv, conf=eff_conf, verbose=False, imgsz=640)
-                        ih, iw = img_cv.shape[:2]
-                        candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=iw, frame_h=ih)
-                        found = []
-                        for box, box_conf, kind in candidates:
-                            x1, y1, x2, y2 = box
-                            crop = img_cv[max(0, y1):min(ih, y2), max(0, x1):min(iw, x2)]
-                            if crop.size > 0:
-                                t, c, _ = extract_plate_text(reader, crop)
-                                if t:
-                                    cleaned = disambiguate_plate(t)
-                                    if is_valid_plate_pattern(cleaned):
-                                        found.append((cleaned, c))
+                    # Hanya proses SEKALI saat foto baru diambil (cegah loading terus-menerus / infinite loop rerun!)
+                    if st.session_state.get("last_processed_cam_hash") != curr_hash:
+                        st.session_state["last_processed_cam_hash"] = curr_hash
+                        img_cv = cv2.imdecode(np.asarray(bytearray(file_bytes), dtype=np.uint8), cv2.IMREAD_COLOR)
 
-                        if found:
-                            best_t, best_c = max(found, key=lambda x: x[1])
-                            st.session_state["current_plate"] = best_t
-                            st.session_state["current_conf"] = best_c
-                            st.session_state["current_source"] = "Kamera Cepat"
-                            st.toast(f"Plat terdeteksi: {best_t}", icon="✅")
-                            st.rerun()
-                        else:
-                            st.session_state["current_plate"] = "INVALID_PLATE"
-                            st.session_state["current_conf"] = 0.0
-                            st.session_state["current_source"] = "Bukan Kendaraan"
-                            st.rerun()
+                        with st.spinner("AI sedang membaca plat nomor dari foto..."):
+                            from ocr_engine import extract_plate_text
+                            model, reader = get_yolo_and_ocr(DEFAULT_MODEL_PATH)
+                            eff_conf = max(0.35, min(conf_threshold, 0.50))
+                            preds = model.predict(source=img_cv, conf=eff_conf, verbose=False, imgsz=640)
+                            ih, iw = img_cv.shape[:2]
+                            candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=iw, frame_h=ih)
+                            found = []
+                            for box, box_conf, kind in candidates:
+                                x1, y1, x2, y2 = box
+                                crop = img_cv[max(0, y1):min(ih, y2), max(0, x1):min(iw, x2)]
+                                if crop.size > 0:
+                                    t, c, _ = extract_plate_text(reader, crop)
+                                    if t:
+                                        cleaned = disambiguate_plate(t)
+                                        if is_valid_plate_pattern(cleaned):
+                                            found.append((cleaned, c))
+
+                            if found:
+                                best_t, best_c = max(found, key=lambda x: x[1])
+                                st.session_state["current_plate"] = best_t
+                                st.session_state["current_conf"] = best_c
+                                st.session_state["current_source"] = "Kamera Cepat"
+                                st.toast(f"Plat terdeteksi: {best_t}", icon="✅")
+                            else:
+                                st.session_state["current_plate"] = "INVALID_PLATE"
+                                st.session_state["current_conf"] = 0.0
+                                st.session_state["current_source"] = "Bukan Kendaraan"
+                        st.rerun()
 
         # METODE 2: KETIK MANUAL
         elif mode_input == "⌨️ Ketik Plat Manual":
@@ -1450,6 +1458,7 @@ with tab_gate:
             """, unsafe_allow_html=True)
             if st.button("🔄 Pindai Ulang Kendaraan", type="secondary", use_container_width=True):
                 st.session_state["current_plate"] = None
+                st.session_state["last_processed_cam_hash"] = None
                 st.rerun()
 
         else:
@@ -1584,6 +1593,7 @@ with tab_gate:
 
             if btn_cancel:
                 st.session_state["current_plate"] = None
+                st.session_state["last_processed_cam_hash"] = None
                 st.rerun()
 
             if btn_open:
@@ -1623,6 +1633,7 @@ with tab_gate:
                 )
                 st.success(f"🎉 Gerbang {final_gate_code} Terbuka! Transaksi #{tx_id} ({final_p}) berhasil dicatat.")
                 st.session_state["current_plate"] = None
+                st.session_state["last_processed_cam_hash"] = None
                 st.rerun()
 
 # ==============================================================================
