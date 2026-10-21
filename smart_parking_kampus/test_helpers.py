@@ -417,6 +417,51 @@ class TestDatabaseManager(unittest.TestCase):
         self.assertTrue(cleared >= 1)
         self.assertEqual(len(db_manager.list_transactions(db_path=self.db_path)), 0)
 
+    def test_checkout_and_delete_active_sessions(self):
+        # 1. Masukkan 3 kendaraan testing (IN)
+        id1 = db_manager.save_transaction("B 1010 ABC", "User 1", "Mahasiswa", 2000, "Masuk", gate_direction="IN", db_path=self.db_path)
+        id2 = db_manager.save_transaction("B 2020 DEF", "User 2", "Tamu", 3000, "Masuk", gate_direction="IN", db_path=self.db_path)
+        id3 = db_manager.save_transaction("B 3030 GHI", "User 3", "Dosen", 0, "Masuk", gate_direction="IN", db_path=self.db_path)
+
+        self.assertEqual(db_manager.get_currently_parked_count(db_path=self.db_path), 3)
+
+        # 2. Checkout satu kendaraan (B 1010 ABC)
+        out_id = db_manager.checkout_vehicle("B 1010 ABC", fee=2000, notes="Keluar testing", db_path=self.db_path)
+        self.assertIsNotNone(out_id)
+        self.assertEqual(db_manager.get_currently_parked_count(db_path=self.db_path), 2)
+
+        # 3. Hapus satu sesi parkir aktif berdasarkan ID (id2)
+        del_count = db_manager.delete_active_parked_sessions(tx_id=id2, db_path=self.db_path)
+        self.assertEqual(del_count, 1)
+        self.assertEqual(db_manager.get_currently_parked_count(db_path=self.db_path), 1)
+
+        # 4. Hapus semua sisa sesi aktif testing sekaligus
+        cleared_active = db_manager.delete_active_parked_sessions(db_path=self.db_path)
+        self.assertEqual(cleared_active, 1)
+        self.assertEqual(db_manager.get_currently_parked_count(db_path=self.db_path), 0)
+
+    def test_update_transaction_fields(self):
+        tx_id = db_manager.save_transaction("B 9999 OLD", "Old Owner", "Tamu", 5000, "Masuk", gate_direction="IN", notes="Old note", db_path=self.db_path)
+        up_ok = db_manager.update_transaction(
+            tx_id=tx_id,
+            plate="B 9999 NEW",
+            owner_name="New Owner",
+            category="Mahasiswa",
+            fee=2000,
+            gate_direction="OUT",
+            notes="Updated note",
+            db_path=self.db_path
+        )
+        self.assertTrue(up_ok)
+        txs = db_manager.list_transactions(db_path=self.db_path)
+        updated = txs[0]
+        self.assertEqual(updated["plate"], "B 9999 NEW")
+        self.assertEqual(updated["owner_name"], "New Owner")
+        self.assertEqual(updated["category"], "Mahasiswa")
+        self.assertEqual(updated["fee"], 2000)
+        self.assertEqual(updated["gate_direction"], "OUT")
+        self.assertEqual(updated["notes"], "Updated note")
+
 
 class TestDatasetValidator(unittest.TestCase):
     def test_validate_annotation_line(self):

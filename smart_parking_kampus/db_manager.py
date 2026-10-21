@@ -10,6 +10,7 @@ from parking_logic import (
     TARIFFS,
     format_duration,
     calculate_parking_fee,
+    rupiah,
 )
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -468,24 +469,129 @@ def clear_all_transactions(db_path: str = DEFAULT_DB_PATH) -> int:
 
 def update_transaction(
     tx_id: int,
+    plate: Optional[str] = None,
     owner_name: Optional[str] = None,
     category: Optional[str] = None,
     fee: Optional[int] = None,
+    gate_direction: Optional[str] = None,
     notes: Optional[str] = None,
     db_path: str = DEFAULT_DB_PATH
 ) -> bool:
-    """Memperbarui informasi atau catatan pada transaksi tertentu."""
+    """Memperbarui informasi, nomor plat, kategori, tarif, arah gerbang, atau catatan pada transaksi tertentu."""
     with get_connection(db_path) as conn:
         row = conn.execute("SELECT * FROM transactions WHERE id = ?", (tx_id,)).fetchone()
         if not row:
             return False
+        new_plate = format_plate_display(plate) if plate is not None else row["plate"]
         new_owner = owner_name if owner_name is not None else row["owner_name"]
         new_cat = category if category is not None else row["category"]
         new_fee = fee if fee is not None else row["fee"]
+        new_gate = gate_direction if gate_direction is not None else row["gate_direction"]
         new_notes = notes if notes is not None else row["notes"]
         conn.execute("""
             UPDATE transactions
-            SET owner_name = ?, category = ?, fee = ?, notes = ?
+            SET plate = ?, owner_name = ?, category = ?, fee = ?, gate_direction = ?, notes = ?
             WHERE id = ?
-        """, (new_owner, new_cat, new_fee, new_notes, tx_id))
+        """, (new_plate, new_owner, new_cat, new_fee, new_gate, new_notes, tx_id))
         return True
+
+
+def checkout_vehicle(
+    plate: str,
+    fee: Optional[int] = None,
+    notes: Optional[str] = "Checkout Manual Petugas",
+    db_path: str = DEFAULT_DB_PATH
+) -> Optional[int]:
+    """
+    Menyelesaikan sesi parkir kendaraan (mencatat transaksi OUT).
+    Jika fee None, otomatis dihitung berdasarkan kategori dan durasi parkir.
+    """
+    norm = normalize_plate(plate)
+    if not norm:
+        return None
+
+    active = get_active_entry(plate, db_path=db_path)
+    if not active:
+        return None
+
+    entry_iso = active.get("created_at")
+    dur_mins = 0
+    if entry_iso:
+        try:
+            diff = datetime.now() - datetime.fromisoformat(entry_iso)
+            dur_mins = max(0, int(diff.total_seconds() // 60))
+        except Exception:
+            pass
+
+    cat = active.get("category") or "Tamu"
+    calc_fee = calculate_parking_fee(cat, dur_mins) if fee is None else fee
+
+    out_id = save_transaction(
+        plate=format_plate_display(plate),
+        owner_name=active.get("owner_name"),
+        category=cat,
+        fee=calc_fee,
+        decision=f"CHECKOUT KELUAR ({format_duration(dur_mins)}) — {rupiah(calc_fee)}",
+        status="CONFIRMED",
+        gate_direction="OUT",
+        notes=notes or "Checkout Manual",
+        duration_minutes=dur_mins,
+        entry_time=entry_iso,
+        db_path=db_path
+    )
+    return out_id
+
+
+def delete_active_parked_sessions(
+    tx_id: Optional[int] = None,
+    plate: Optional[str] = None,
+    db_path: str = DEFAULT_DB_PATH
+) -> int:
+    """
+    Menghapus transaksi sesi parkir yang sedang aktif (misal sisa data testing kemarin).
+    Jika tx_id diberikan: menghapus transaksi ID tersebut.
+    Jika plate diberikan: menghapus sesi aktif plat tersebut.
+    Jika keduanya None: menghapus SEMUA sesi kendaraan yang saat ini sedang parkir (IN),
+    sehingga jumlah kendaraan terparkir seketika menjadi 0.
+    """
+    active_vehicles = get_currently_parked_vehicles(db_path)
+    if not active_vehicles:
+        return 0
+
+    with get_connection(db_path) as conn:
+        if tx_id is not None:
+            res = conn.execute("DELETE FROM transactions WHERE id = ?", (tx_id,))
+            return res.rowcount
+        elif plate is not None:
+            norm = normalize_plate(plate)
+            target_ids = [v["id"] for v in active_vehicles if normalize_plate(v["plate"]) == norm]
+            if target_ids:
+                ph = ",".join(["?"] * len(target_ids))
+                res = conn.execute(f"DELETE FROM transactions WHERE id IN ({ph})", target_ids)
+                return res.rowcount
+            return 0
+        else:
+            all_active_ids = [v["id"] for v in active_vehicles]
+            if all_active_ids:
+                ph = ",".join(["?"] * len(all_active_ids))
+                res = conn.execute(f"DELETE FROM transactions WHERE id IN ({ph})", all_active_ids)
+                return res.rowcount
+            return 0
+
+
+def checkout_all_active_vehicles(
+    notes: str = "Checkout Massal / Penutupan Sesi",
+    db_path: str = DEFAULT_DB_PATH
+) -> int:
+    """
+    Mencatat transaksi OUT untuk seluruh kendaraan yang saat ini sedang parkir,
+    sehingga seluruh sesi parkir terselesaikan secara resmi.
+    """
+    active_vehicles = get_currently_parked_vehicles(db_path)
+    count = 0
+    for v in active_vehicles:
+        res = checkout_vehicle(v["plate"], notes=notes, db_path=db_path)
+        if res:
+            count += 1
+    return count
+

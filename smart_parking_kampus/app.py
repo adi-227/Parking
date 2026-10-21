@@ -1462,27 +1462,36 @@ with tab_vehicles:
         )
 
 # ==============================================================================
-# TAB 3: LAPORAN & RIWAYAT TRANSAKSI
+# TAB 3: LAPORAN & RIWAYAT TRANSAKSI (DASHBOARD & CRUD)
 # ==============================================================================
 with tab_history:
     st.subheader("Dashboard & Log Riwayat Transaksi")
 
     metrics = db_manager.get_dashboard_metrics()
     m1, m2, m3, m4, m5, m6 = st.columns(6)
-    m1.metric("Kendaraan Terdaftar", metrics["total_vehicles_registered"])
-    m2.metric("Sedang Parkir", f"{metrics['currently_parked']} Unit")
-    m3.metric("Total Pemeriksaan", metrics["total_examinations"])
-    m4.metric("Civitas Terdaftar", metrics["total_registered_inspected"])
-    m5.metric("Plat Tamu / Luar", metrics["total_unregistered_inspected"])
-    m6.metric("Total Pendapatan", rupiah(metrics["total_revenue"]))
+    m1.metric("Kendaraan Terdaftar", metrics["total_vehicles_registered"], help="Total kendaraan sivitas (Dosen & Mahasiswa) di database master kampus.")
+    m2.metric("Sedang Parkir", f"{metrics['currently_parked']} Unit", help="Jumlah kendaraan yang saat ini masih berada di dalam area parkir kampus (sudah IN tapi belum OUT).")
+    m3.metric("Total Pemeriksaan", metrics["total_examinations"], help="Total berapa kali palang gerbang dibuka / kendaraan diperiksa oleh AI (termasuk pemeriksaan gerbang Masuk dan Keluar).")
+    m4.metric("Civitas Terdaftar", metrics["total_registered_inspected"], help="Berapa kali pemeriksaan melibatkan kendaraan sivitas kampus resmi (Dosen gratis Rp0, Mahasiswa flat Rp2.000).")
+    m5.metric("Plat Tamu / Luar", metrics["total_unregistered_inspected"], help="Berapa kali pemeriksaan melibatkan pengunjung luar / belum terdaftar di database.")
+    m6.metric("Total Pendapatan", rupiah(metrics["total_revenue"]), help="Akumulasi tarif parkir resmi yang berhasil dicatat sistem.")
+
+    # PANDUAN PENJELASAN ISTILAH METRIK
+    with st.expander("ℹ️ Penjelasan & Arti Metrik Dashboard (Klik untuk Membaca)", expanded=False):
+        st.markdown("""
+        - 🔍 **Total Pemeriksaan**: Total akumulasi berapa kali gerbang pos dibuka oleh sistem AI (baik saat kendaraan **Masuk / IN** maupun **Keluar / OUT**). Contoh: jika 1 motor masuk di pagi hari lalu keluar di sore hari, itu dihitung sebagai **2 kali pemeriksaan**. Metrik ini menggambarkan total intensitas buka-tutup palang gerbang.
+        - 🎓 **Civitas Terdaftar**: Jumlah pemeriksaan terhadap kendaraan yang plat nomornya **sudah terdaftar di database master kampus** sebagai milik **Dosen** atau **Mahasiswa**, sehingga secara otomatis memperoleh hak tarif khusus (Dosen Rp0 / gratis, Mahasiswa tarif flat subsidi Rp2.000 seharian).
+        - 🏷️ **Plat Tamu / Luar**: Jumlah pemeriksaan kendaraan tamu umum / luar kampus yang belum terdaftar di database kampus (dikenakan tarif normal tamu: Rp3.000 jam pertama + Rp2.000/jam berikutnya).
+        - 🚗 **Sedang Parkir**: Jumlah kendaraan yang saat ini posisinya masih di dalam area kampus (sudah tercatat masuk tapi belum checkout keluar).
+        """)
 
     st.divider()
 
     # --------------------------------------------------------------------------
-    # 1. KENDARAAN SEDANG PARKIR DI DALAM KAMPUS (SESI AKTIF)
+    # 1. KENDARAAN SEDANG PARKIR DI DALAM KAMPUS (SESI AKTIF & KONTROL CEPAT)
     # --------------------------------------------------------------------------
     st.markdown("### 🚨 Kendaraan Sedang Parkir di Dalam Kampus (Sesi Aktif)")
-    st.caption("Daftar seluruh kendaraan (motor/mobil civitas maupun tamu) yang sudah masuk (IN) dan belum keluar (OUT).")
+    st.caption("Daftar seluruh kendaraan (motor/mobil civitas maupun tamu) yang sudah masuk (IN) dan belum keluar (OUT). Anda bisa langsung checkout atau menghapus sesi parkir di sini.")
 
     active_parked_list = db_manager.get_currently_parked_vehicles()
 
@@ -1491,7 +1500,7 @@ with tab_history:
         active_table = []
         for a in active_parked_list:
             active_table.append({
-                "ID Transaksi": f"#{a.get('id')}",
+                "ID": f"#{a.get('id')}",
                 "Plat Nomor": format_plate_display(a.get("plate")),
                 "Nama Pemilik": a.get("owner_name") or "(Tamu Luar)",
                 "Kategori": a.get("category") or "Tamu",
@@ -1501,107 +1510,276 @@ with tab_history:
                 "Status": "🟢 Parkir di Dalam",
             })
         st.dataframe(pd.DataFrame(active_table), use_container_width=True, hide_index=True)
+
+        # PANEL KONTROL LANGSUNG KENDARAAN AKTIF (SOLUSI 4 MOTOR TESTING!)
+        st.markdown("##### ⚡ Aksi Cepat Kendaraan Sedang Parkir:")
+        col_act_ind, col_act_bulk = st.columns([1.2, 1.2])
+
+        with col_act_ind:
+            st.caption("Aksi per motor/kendaraan tertentu:")
+            active_opts = {
+                f"#{a['id']} | {format_plate_display(a['plate'])} ({a.get('owner_name') or a.get('category') or 'Tamu'})": a
+                for a in active_parked_list
+            }
+            sel_active_label = st.selectbox(
+                "Pilih Kendaraan Parkir Aktif:",
+                list(active_opts.keys()),
+                key="sel_active_veh_action"
+            )
+            sel_veh = active_opts[sel_active_label]
+            btn_c1, btn_c2 = st.columns(2)
+            with btn_c1:
+                if st.button("🚗 Checkout Keluar (OUT)", type="primary", use_container_width=True, key="btn_checkout_single_active"):
+                    db_manager.checkout_vehicle(sel_veh["plate"], notes="Checkout Manual Petugas via Dashboard")
+                    st.toast(f"Kendaraan {format_plate_display(sel_veh['plate'])} berhasil dikeluarkan (OUT)!", icon="🚗")
+                    st.rerun()
+            with btn_c2:
+                if st.button("🗑️ Hapus Sesi (Testing)", type="secondary", use_container_width=True, key="btn_del_single_active"):
+                    db_manager.delete_active_parked_sessions(tx_id=sel_veh["id"])
+                    st.toast(f"Sesi kendaraan #{sel_veh['id']} ({format_plate_display(sel_veh['plate'])}) berhasil dihapus!", icon="🗑️")
+                    st.rerun()
+
+        with col_act_bulk:
+            st.caption("Aksi massal (bersihkan seluruh data testing kemarin):")
+            col_b1, col_b2 = st.columns(2)
+            with col_b1:
+                if st.button("🧹 Hapus Semua Sesi Aktif (Testing)", type="secondary", use_container_width=True, key="btn_clear_all_active_test"):
+                    del_cnt = db_manager.delete_active_parked_sessions()
+                    st.toast(f"Berhasil menghapus {del_cnt} sesi parkir testing!", icon="🧹")
+                    st.rerun()
+            with col_b2:
+                if st.button("🚪 Checkout Semua Kendaraan", type="primary", use_container_width=True, key="btn_checkout_all_active"):
+                    co_cnt = db_manager.checkout_all_active_vehicles(notes="Checkout Massal Sesi Hari Ini")
+                    st.toast(f"Berhasil mencatat checkout keluar untuk {co_cnt} kendaraan!", icon="🚪")
+                    st.rerun()
     else:
         st.success("✅ **Semua kendaraan telah keluar.** Saat ini tidak ada kendaraan yang sedang parkir di dalam area kampus.")
 
     st.divider()
 
     # --------------------------------------------------------------------------
-    # 2. LOG RIWAYAT TRANSAKSI LENGKAP & FILTER
+    # 2. CRUD LENGKAP LOG RIWAYAT TRANSAKSI
     # --------------------------------------------------------------------------
-    st.markdown("### 📋 Seluruh Riwayat Transaksi Gerbang")
+    st.markdown("### 📋 Manajemen & Riwayat Transaksi Gerbang")
 
-    r_col1, r_col2, r_col3 = st.columns([2, 1, 1])
-    filter_plat_tx = r_col1.text_input("Filter Plat Transaksi", "", key="filter_plat_tx_input")
-    filter_cat_tx = r_col2.selectbox("Filter Kategori", ["Semua", "Dosen", "Mahasiswa", "Tamu / Belum Terdaftar"], key="filter_cat_tx_select")
-    limit_tx = r_col3.number_input("Batas Baris", min_value=10, max_value=1000, value=200, step=50, key="limit_tx_num")
+    tx_list = db_manager.list_transactions(limit=1000)
 
-    tx_list = db_manager.list_transactions(
-        limit=limit_tx,
-        plate_filter=filter_plat_tx,
-        category_filter=filter_cat_tx if filter_cat_tx != "Semua" else None,
-    )
+    crud_hist1, crud_hist2, crud_hist3, crud_hist4 = st.tabs([
+        "📋 Log Riwayat & Filter (Read)",
+        "➕ Catat Transaksi Manual (Create)",
+        "✏️ Edit Transaksi (Update)",
+        "🗑️ Hapus & Pembersihan Log (Delete)",
+    ])
 
-    if tx_list:
-        for item in tx_list:
-            raw_fee = item.get("fee")
-            item["fee_display"] = rupiah(raw_fee)
-            dur = item.get("duration_minutes")
-            if item.get("gate_direction") == "OUT" and dur is not None and dur > 0:
-                item["duration_text"] = format_duration(dur)
-            elif item.get("gate_direction") == "OUT":
-                item["duration_text"] = "< 1 Menit"
-            else:
-                item["duration_text"] = "Sesi Masuk"
+    # --------------------------------------------------------------------------
+    # CRUD 1: LOG RIWAYAT & FILTER (READ)
+    # --------------------------------------------------------------------------
+    with crud_hist1:
+        r_col1, r_col2, r_col3, r_col4 = st.columns([2, 1, 1, 1])
+        filter_plat_tx = r_col1.text_input("🔍 Cari Plat / Nama", "", key="filter_plat_tx_input")
+        filter_cat_tx = r_col2.selectbox("Filter Kategori", ["Semua", "Dosen", "Mahasiswa", "Tamu / Belum Terdaftar"], key="filter_cat_tx_select")
+        filter_gate_tx = r_col3.selectbox("Arah Gerbang", ["Semua", "🟢 Masuk (IN)", "🔴 Keluar (OUT)"], key="filter_gate_tx_select")
+        limit_tx = r_col4.number_input("Batas Baris", min_value=10, max_value=1000, value=200, step=50, key="limit_tx_num")
 
-        df_tx = pd.DataFrame(tx_list)
-        cols_order = ["id", "created_at", "plate", "owner_name", "category", "fee_display", "gate_direction", "duration_text", "decision", "notes"]
-        display_tx = df_tx[cols_order]
-        display_tx.columns = ["ID", "Waktu", "Plat Nomor", "Nama Pemilik", "Kategori", "Tarif", "Gerbang", "Durasi Parkir", "Status Keputusan", "Catatan"]
-        
-        st.dataframe(display_tx, use_container_width=True, hide_index=True)
+        gate_filter_val = None
+        if "IN" in filter_gate_tx:
+            gate_filter_val = "IN"
+        elif "OUT" in filter_gate_tx:
+            gate_filter_val = "OUT"
 
-        st.download_button(
-            "📥 Unduh Laporan Riwayat (CSV)",
-            data=display_tx.to_csv(index=False).encode("utf-8-sig"),
-            file_name="laporan_transaksi_parkir.csv",
-            mime="text/csv",
-            key="btn_download_tx_csv"
+        filtered_tx = db_manager.list_transactions(
+            limit=limit_tx,
+            plate_filter=filter_plat_tx,
+            category_filter=filter_cat_tx if filter_cat_tx != "Semua" else None,
         )
-    else:
-        st.info("Belum ada catatan transaksi yang sesuai filter.")
+        if gate_filter_val:
+            filtered_tx = [t for t in filtered_tx if t.get("gate_direction") == gate_filter_val]
 
-    st.divider()
+        if filtered_tx:
+            for item in filtered_tx:
+                raw_fee = item.get("fee")
+                item["fee_display"] = rupiah(raw_fee)
+                dur = item.get("duration_minutes")
+                if item.get("gate_direction") == "OUT" and dur is not None and dur > 0:
+                    item["duration_text"] = format_duration(dur)
+                elif item.get("gate_direction") == "OUT":
+                    item["duration_text"] = "< 1 Menit"
+                else:
+                    item["duration_text"] = "Sesi Masuk (IN)"
+
+            df_tx = pd.DataFrame(filtered_tx)
+            cols_order = ["id", "created_at", "plate", "owner_name", "category", "fee_display", "gate_direction", "duration_text", "decision", "notes"]
+            display_tx = df_tx[cols_order]
+            display_tx.columns = ["ID", "Waktu", "Plat Nomor", "Nama Pemilik", "Kategori", "Tarif", "Gerbang", "Durasi Parkir", "Status Keputusan", "Catatan"]
+            
+            st.dataframe(display_tx, use_container_width=True, hide_index=True)
+
+            st.download_button(
+                "📥 Unduh Laporan Riwayat (CSV)",
+                data=display_tx.to_csv(index=False).encode("utf-8-sig"),
+                file_name="laporan_transaksi_parkir.csv",
+                mime="text/csv",
+                key="btn_download_tx_csv"
+            )
+        else:
+            st.info("Belum ada catatan transaksi yang sesuai filter.")
 
     # --------------------------------------------------------------------------
-    # 3. MANAJEMEN & PEMBERSIHAN RIWAYAT TRANSAKSI (CRUD RIWAYAT)
+    # CRUD 2: CATAT TRANSAKSI MANUAL (CREATE)
     # --------------------------------------------------------------------------
-    with st.expander("⚙️ Manajemen & Pembersihan Riwayat Transaksi (Hapus Riwayat Agar Tidak Numpuk)", expanded=False):
-        st.markdown("Pilih opsi pembersihan riwayat transaksi di bawah ini sesuai kebutuhan:")
+    with crud_hist2:
+        st.markdown("#### ➕ Catat Transaksi Masuk / Keluar Manual")
+        st.caption("Gunakan jika petugas membuka palang gerbang secara manual tanpa melalui kamera otomatis.")
 
-        m_col1, m_col2, m_col3 = st.columns([1.2, 1.2, 1.1])
+        with st.form("form_create_manual_tx", clear_on_submit=True):
+            col_m1, col_m2 = st.columns(2)
+            with col_m1:
+                man_plat = st.text_input("Nomor Plat Kendaraan", placeholder="Contoh: B 1234 XYZ")
+                man_cat = st.selectbox("Kategori Civitas", ["Mahasiswa", "Dosen", "Tamu / Belum Terdaftar"])
+                man_gate = st.selectbox("Arah Gerbang", ["IN (Masuk)", "OUT (Keluar)"])
+            with col_m2:
+                man_owner = st.text_input("Nama Pemilik (Opsional)", placeholder="Nama Pengendara")
+                man_fee = st.number_input("Tarif Parkir (Rp)", min_value=0, max_value=500000, value=2000, step=1000)
+                man_notes = st.text_input("Catatan Petugas (Opsional)", placeholder="Contoh: Palang dibuka manual oleh petugas pos")
 
-        # Opsi 1: Bersihkan Riwayat Selesai (Rekomendasi Utama)
+            btn_submit_man = st.form_submit_button("➕ Simpan Transaksi Manual", type="primary", use_container_width=True)
+            if btn_submit_man:
+                if not man_plat.strip():
+                    st.error("Nomor plat kendaraan wajib diisi!")
+                else:
+                    gate_code = "IN" if "IN" in man_gate else "OUT"
+                    saved_id = db_manager.save_transaction(
+                        plate=man_plat.strip(),
+                        owner_name=man_owner.strip() or None,
+                        category=man_cat,
+                        fee=int(man_fee),
+                        decision=f"INPUT MANUAL PETUGAS ({gate_code})",
+                        status="CONFIRMED",
+                        gate_direction=gate_code,
+                        notes=man_notes.strip() or "Input Manual",
+                    )
+                    st.success(f"🎉 Transaksi #{saved_id} ({format_plate_display(man_plat)}) berhasil dicatat secara manual!")
+                    st.rerun()
+
+    # --------------------------------------------------------------------------
+    # CRUD 3: EDIT TRANSAKSI (UPDATE)
+    # --------------------------------------------------------------------------
+    with crud_hist3:
+        st.markdown("#### ✏️ Edit / Perbarui Data Transaksi")
+        st.caption("Koreksi data riwayat transaksi jika terjadi salah input plat, perubahan tarif, atau koreksi catatan.")
+
+        if tx_list:
+            tx_edit_choices = {
+                f"#{t['id']} | {format_plate_display(t['plate'])} ({t.get('gate_direction')}) - {t.get('category')} - {t['created_at'][:16]}": t
+                for t in tx_list[:100]
+            }
+            sel_edit_tx_label = st.selectbox(
+                "Pilih Transaksi yang Ingin Diedit:",
+                ["— Pilih Transaksi —"] + list(tx_edit_choices.keys()),
+                key="select_edit_tx_dropdown"
+            )
+
+            if sel_edit_tx_label != "— Pilih Transaksi —":
+                target_tx = tx_edit_choices[sel_edit_tx_label]
+
+                with st.form("form_edit_existing_tx"):
+                    col_ed1, col_ed2 = st.columns(2)
+                    with col_ed1:
+                        ed_plat = st.text_input("Nomor Plat", value=format_plate_display(target_tx["plate"]))
+                        cat_list = ["Mahasiswa", "Dosen", "Tamu / Belum Terdaftar"]
+                        cat_idx = 0
+                        if target_tx.get("category") in cat_list:
+                            cat_idx = cat_list.index(target_tx["category"])
+                        ed_cat = st.selectbox("Kategori", cat_list, index=cat_idx)
+                        ed_gate_idx = 0 if target_tx.get("gate_direction") == "IN" else 1
+                        ed_gate = st.selectbox("Arah Gerbang", ["IN (Masuk)", "OUT (Keluar)"], index=ed_gate_idx)
+                    with col_ed2:
+                        ed_owner = st.text_input("Nama Pemilik", value=target_tx.get("owner_name") or "")
+                        cur_fee = target_tx.get("fee") if target_tx.get("fee") is not None else 0
+                        ed_fee = st.number_input("Tarif Parkir (Rp)", min_value=0, max_value=500000, value=int(cur_fee), step=1000)
+                        ed_notes = st.text_input("Catatan Petugas", value=target_tx.get("notes") or "")
+
+                    btn_save_tx_edit = st.form_submit_button("💾 Simpan Perubahan Transaksi", type="primary", use_container_width=True)
+                    if btn_save_tx_edit:
+                        if not ed_plat.strip():
+                            st.error("Nomor plat tidak boleh kosong!")
+                        else:
+                            gate_dir = "IN" if "IN" in ed_gate else "OUT"
+                            ok = db_manager.update_transaction(
+                                tx_id=target_tx["id"],
+                                plate=ed_plat.strip(),
+                                owner_name=ed_owner.strip() or None,
+                                category=ed_cat,
+                                fee=int(ed_fee),
+                                gate_direction=gate_dir,
+                                notes=ed_notes.strip() or None,
+                            )
+                            if ok:
+                                st.success(f"✅ Transaksi #{target_tx['id']} berhasil diperbarui!")
+                                st.rerun()
+                            else:
+                                st.error("Gagal memperbarui transaksi.")
+        else:
+            st.info("Belum ada transaksi di database untuk diedit.")
+
+    # --------------------------------------------------------------------------
+    # CRUD 4: HAPUS & PEMBERSIHAN LOG (DELETE)
+    # --------------------------------------------------------------------------
+    with crud_hist4:
+        st.markdown("#### 🗑️ Hapus & Bersihkan Riwayat Transaksi")
+        st.caption("Pilih opsi penghapusan riwayat transaksi di bawah ini agar data tidak menumpuk:")
+
+        m_col1, m_col2 = st.columns(2)
+
+        # Opsi 1: Hapus Transaksi Tertentu Berdasarkan ID
         with m_col1:
-            st.markdown("##### 🧹 1. Bersihkan Riwayat Selesai")
-            st.caption("Menghapus log transaksi yang kendaraannya sudah keluar (OUT). **Sesi kendaraan yang sedang parkir (IN) tetap tersimpan aman** dan jumlah kendaraan tidak berubah.")
-            if st.button("🧹 Bersihkan Transaksi Selesai", type="primary", use_container_width=True, key="btn_clean_completed_tx"):
-                deleted_count = db_manager.delete_completed_transactions()
-                st.toast(f"Berhasil membersihkan {deleted_count} riwayat transaksi selesai!", icon="🧹")
-                st.rerun()
-
-        # Opsi 2: Hapus Transaksi Berdasarkan ID
-        with m_col2:
-            st.markdown("##### 🗑️ 2. Hapus Transaksi Tertentu")
-            st.caption("Hapus satu data transaksi tertentu jika terjadi salah scan kamera atau duplikasi data.")
+            st.markdown("##### 🗑️ 1. Hapus Transaksi Tertentu (Per ID)")
+            st.caption("Hapus satu data transaksi tertentu jika terjadi salah scan kamera atau transaksi palsu.")
             if tx_list:
-                tx_choices = {
+                tx_choices_del = {
                     f"#{t['id']} | {format_plate_display(t['plate'])} ({t.get('gate_direction')}) - {t['created_at'][:16]}": t["id"]
                     for t in tx_list[:50]
                 }
                 del_choice_label = st.selectbox(
-                    "Pilih Transaksi:",
-                    ["— Pilih Transaksi —"] + list(tx_choices.keys()),
-                    key="select_del_tx_id"
+                    "Pilih Transaksi yang Ingin Dihapus:",
+                    ["— Pilih Transaksi —"] + list(tx_choices_del.keys()),
+                    key="select_del_tx_id_tab4"
                 )
                 if del_choice_label != "— Pilih Transaksi —":
-                    target_tx_id = tx_choices[del_choice_label]
-                    if st.button(f"🗑️ Hapus Transaksi #{target_tx_id}", type="secondary", use_container_width=True, key="btn_del_single_tx"):
+                    target_tx_id = tx_choices_del[del_choice_label]
+                    if st.button(f"🗑️ Hapus Transaksi #{target_tx_id} Sekarang", type="secondary", use_container_width=True, key="btn_del_single_tx_tab4"):
                         db_manager.delete_transaction(target_tx_id)
                         st.toast(f"Transaksi #{target_tx_id} berhasil dihapus!", icon="🗑️")
                         st.rerun()
             else:
                 st.caption("Tidak ada riwayat untuk dihapus.")
 
-        # Opsi 3: Reset / Hapus Seluruh Riwayat
-        with m_col3:
-            st.markdown("##### ⚠️ 3. Reset Seluruh Riwayat")
-            st.caption("Menghapus seluruh riwayat log transaksi di database (reset total riwayat).")
-            confirm_reset_all = st.checkbox("Saya yakin ingin menghapus seluruh log transaksi", key="chk_confirm_reset_all_tx")
-            if st.button("⚠️ Hapus Seluruh Riwayat", type="secondary", disabled=not confirm_reset_all, use_container_width=True, key="btn_clear_all_tx_danger"):
+            st.divider()
+            st.markdown("##### 🚨 2. Hapus Semua Sesi Parkir Aktif (Testing)")
+            st.caption("Menghapus seluruh transaksi masuk (IN) yang saat ini tertahan, sehingga jumlah kendaraan terparkir seketika menjadi 0 Unit.")
+            if st.button("🧹 Bersihkan Sesi Parkir Testing", type="secondary", use_container_width=True, key="btn_clean_active_sessions_tab4"):
+                cleared_cnt = db_manager.delete_active_parked_sessions()
+                st.toast(f"Berhasil menghapus {cleared_cnt} sesi parkir aktif testing!", icon="🧹")
+                st.rerun()
+
+        # Opsi 3 & 4: Bersihkan Riwayat Selesai & Reset Total
+        with m_col2:
+            st.markdown("##### 🧹 3. Bersihkan Riwayat Selesai (Hanya OUT)")
+            st.caption("Menghapus log transaksi yang kendaraannya sudah keluar (OUT). **Sesi kendaraan yang sedang parkir (IN) tetap aman**.")
+            if st.button("🧹 Bersihkan Transaksi Selesai", type="primary", use_container_width=True, key="btn_clean_completed_tx_tab4"):
+                deleted_count = db_manager.delete_completed_transactions()
+                st.toast(f"Berhasil membersihkan {deleted_count} riwayat transaksi selesai!", icon="🧹")
+                st.rerun()
+
+            st.divider()
+            st.markdown("##### ⚠️ 4. Reset Seluruh Riwayat Database")
+            st.caption("Menghapus SELURUH catatan riwayat transaksi di database (reset total riwayat).")
+            confirm_reset_all = st.checkbox("Saya yakin ingin menghapus seluruh log transaksi secara permanen", key="chk_confirm_reset_all_tx_tab4")
+            if st.button("⚠️ Hapus Seluruh Riwayat", type="secondary", disabled=not confirm_reset_all, use_container_width=True, key="btn_clear_all_tx_danger_tab4"):
                 cleared_count = db_manager.clear_all_transactions()
                 st.toast(f"Seluruh {cleared_count} transaksi riwayat berhasil direset!", icon="⚠️")
                 st.rerun()
+
 
 # ==============================================================================
 # TAB 4: PANDUAN SISTEM & STATUS AI
