@@ -1616,35 +1616,61 @@ with tab_history:
     st.divider()
 
     # --------------------------------------------------------------------------
-    # 1. KENDARAAN SEDANG PARKIR DI DALAM KAMPUS (SESI AKTIF & KONTROL CEPAT)
+    # 1. KENDARAAN SEDANG PARKIR DI DALAM KAMPUS (CRUD SESI AKTIF SATU PER SATU)
     # --------------------------------------------------------------------------
-    st.markdown("### 🚨 Kendaraan Sedang Parkir di Dalam Kampus (Sesi Aktif)")
-    st.caption("Daftar seluruh kendaraan (motor/mobil civitas maupun tamu) yang sudah masuk (IN) dan belum keluar (OUT). Anda bisa langsung checkout atau menghapus sesi parkir di sini.")
+    st.markdown("### 🚨 Manajemen Kendaraan Sedang Parkir (CRUD Sesi Aktif)")
+    st.caption("Kelola kendaraan (motor/mobil civitas maupun tamu) yang saat ini berada di dalam kampus satu per satu secara presisi (Lihat, Tambah Masuk, Edit, Checkout, atau Hapus).")
 
-    active_parked_list = db_manager.get_currently_parked_vehicles()
+    crud_park1, crud_park2, crud_park3, crud_park4 = st.tabs([
+        "📋 Daftar & Status Parkir (Read)",
+        "➕ Catat Masuk Manual (Create)",
+        "✏️ Edit Sesi Parkir (Update)",
+        "🗑️ Checkout & Hapus Sesi (Delete Satu per Satu)",
+    ])
 
-    if active_parked_list:
-        st.info(f"🟢 Terdeteksi **{len(active_parked_list)} unit kendaraan** yang saat ini masih berada di dalam area parkir kampus:")
-        active_table = []
-        for a in active_parked_list:
-            active_table.append({
-                "ID": f"#{a.get('id')}",
-                "Plat Nomor": format_plate_display(a.get("plate")),
-                "Nama Pemilik": a.get("owner_name") or "(Tamu Luar)",
-                "Kategori": a.get("category") or "Tamu",
-                "Waktu Masuk": (a.get("created_at") or "").replace("T", " "),
-                "Durasi Berjalan": a.get("duration_text", "-"),
-                "Estimasi Tarif": rupiah(a.get("current_fee", 0)),
-                "Status": "🟢 Parkir di Dalam",
-            })
-        st.dataframe(pd.DataFrame(active_table), use_container_width=True, hide_index=True)
+    # CRUD 1: DAFTAR & STATUS PARKIR (READ & AKSI CEPAT SATU PER SATU)
+    with crud_park1:
+        active_parked_list = db_manager.get_currently_parked_vehicles()
+        if active_parked_list:
+            c_flt1, c_flt2 = st.columns([2, 1])
+            with c_flt1:
+                q_act = st.text_input("🔍 Cari Plat / Nama Pemilik di Dalam", "", key="search_active_parked_input")
+            with c_flt2:
+                kat_act = st.selectbox("Filter Kategori", ["Semua", "Dosen", "Mahasiswa", "Tamu / Belum Terdaftar"], key="filter_cat_active_select")
 
-        # PANEL KONTROL LANGSUNG KENDARAAN AKTIF (SOLUSI 4 MOTOR TESTING!)
-        st.markdown("##### ⚡ Aksi Cepat Kendaraan Sedang Parkir:")
-        col_act_ind, col_act_bulk = st.columns([1.2, 1.2])
+            filtered_active = []
+            for a in active_parked_list:
+                if q_act:
+                    match_p = normalize_plate(q_act) in normalize_plate(a.get("plate", ""))
+                    match_n = q_act.lower() in (a.get("owner_name") or "").lower()
+                    if not (match_p or match_n):
+                        continue
+                if kat_act != "Semua":
+                    if kat_act == "Tamu / Belum Terdaftar" and a.get("category") not in ["Tamu", "Belum terdaftar", None]:
+                        continue
+                    elif kat_act in ["Dosen", "Mahasiswa"] and a.get("category") != kat_act:
+                        continue
+                filtered_active.append(a)
 
-        with col_act_ind:
-            st.caption("Aksi per motor/kendaraan tertentu:")
+            st.info(f"🟢 Terdeteksi **{len(active_parked_list)} unit kendaraan** yang saat ini masih berada di dalam area parkir kampus ({len(filtered_active)} ditampilkan):")
+            
+            active_table = []
+            for a in filtered_active:
+                active_table.append({
+                    "ID": f"#{a.get('id')}",
+                    "Plat Nomor": format_plate_display(a.get("plate")),
+                    "Nama Pemilik": a.get("owner_name") or "(Tamu Luar)",
+                    "Kategori": a.get("category") or "Tamu",
+                    "Waktu Masuk": (a.get("created_at") or "").replace("T", " "),
+                    "Durasi Berjalan": a.get("duration_text", "-"),
+                    "Estimasi Tarif": rupiah(a.get("current_fee", 0)),
+                    "Status": "🟢 Parkir di Dalam",
+                })
+            st.dataframe(pd.DataFrame(active_table), use_container_width=True, hide_index=True)
+
+            # AKSI CEPAT SATU PER SATU
+            st.markdown("##### ⚡ Aksi Langsung per Kendaraan (Satu per Satu):")
+            st.caption("Pilih salah satu kendaraan di bawah untuk melakukan checkout atau menghapus sesi secara individual:")
             active_opts = {
                 f"#{a['id']} | {format_plate_display(a['plate'])} ({a.get('owner_name') or a.get('category') or 'Tamu'})": a
                 for a in active_parked_list
@@ -1657,31 +1683,164 @@ with tab_history:
             sel_veh = active_opts[sel_active_label]
             btn_c1, btn_c2 = st.columns(2)
             with btn_c1:
-                if st.button("🚗 Checkout Keluar (OUT)", type="primary", use_container_width=True, key="btn_checkout_single_active"):
+                if st.button(f"🚗 Checkout Keluar (OUT): {format_plate_display(sel_veh['plate'])}", type="primary", use_container_width=True, key="btn_checkout_single_active"):
                     db_manager.checkout_vehicle(sel_veh["plate"], notes="Checkout Manual Petugas via Dashboard")
                     st.toast(f"Kendaraan {format_plate_display(sel_veh['plate'])} berhasil dikeluarkan (OUT)!", icon="🚗")
                     st.rerun()
             with btn_c2:
-                if st.button("🗑️ Hapus Sesi (Testing)", type="secondary", use_container_width=True, key="btn_del_single_active"):
+                if st.button(f"🗑️ Hapus Sesi #{sel_veh['id']} ({format_plate_display(sel_veh['plate'])})", type="secondary", use_container_width=True, key="btn_del_single_active"):
                     db_manager.delete_active_parked_sessions(tx_id=sel_veh["id"])
-                    st.toast(f"Sesi kendaraan #{sel_veh['id']} ({format_plate_display(sel_veh['plate'])}) berhasil dihapus!", icon="🗑️")
+                    st.toast(f"Sesi kendaraan #{sel_veh['id']} ({format_plate_display(sel_veh['plate'])}) berhasil dihapus satu per satu!", icon="🗑️")
                     st.rerun()
+        else:
+            st.success("✅ **Semua kendaraan telah keluar.** Saat ini tidak ada kendaraan yang sedang parkir di dalam area kampus.")
 
-        with col_act_bulk:
-            st.caption("Aksi massal (bersihkan seluruh data testing kemarin):")
-            col_b1, col_b2 = st.columns(2)
-            with col_b1:
-                if st.button("🧹 Hapus Semua Sesi Aktif (Testing)", type="secondary", use_container_width=True, key="btn_clear_all_active_test"):
-                    del_cnt = db_manager.delete_active_parked_sessions()
-                    st.toast(f"Berhasil menghapus {del_cnt} sesi parkir testing!", icon="🧹")
-                    st.rerun()
-            with col_b2:
-                if st.button("🚪 Checkout Semua Kendaraan", type="primary", use_container_width=True, key="btn_checkout_all_active"):
-                    co_cnt = db_manager.checkout_all_active_vehicles(notes="Checkout Massal Sesi Hari Ini")
-                    st.toast(f"Berhasil mencatat checkout keluar untuk {co_cnt} kendaraan!", icon="🚪")
-                    st.rerun()
-    else:
-        st.success("✅ **Semua kendaraan telah keluar.** Saat ini tidak ada kendaraan yang sedang parkir di dalam area kampus.")
+    # CRUD 2: CATAT MASUK MANUAL (CREATE)
+    with crud_park2:
+        st.markdown("#### ➕ Catat Kendaraan Masuk Manual (IN)")
+        st.caption("Gunakan form ini jika ada kendaraan civitas atau tamu yang masuk tanpa terdeteksi kamera gerbang:")
+
+        with st.form("form_create_active_park_session"):
+            col_cr1, col_cr2 = st.columns(2)
+            with col_cr1:
+                cr_plat = st.text_input("Nomor Plat Kendaraan", placeholder="Contoh: B 1234 XYZ atau F 4526 FCF")
+                cr_kat = st.selectbox("Kategori Pengendara", ["Mahasiswa", "Dosen", "Tamu / Pengunjung Luar"])
+            with col_cr2:
+                cr_nama = st.text_input("Nama Pengendara (Opsional)", placeholder="Nama civitas atau tamu luar")
+                cr_notes = st.text_input("Catatan Petugas (Opsional)", value="Masuk Manual Petugas Pos")
+
+            btn_submit_cr = st.form_submit_button("➕ Masukkan ke Parkir Aktif (IN)", type="primary", use_container_width=True)
+            if btn_submit_cr:
+                cleaned_plat = disambiguate_plate(cr_plat.strip())
+                if not cleaned_plat:
+                    st.error("Nomor plat kendaraan tidak boleh kosong!")
+                elif not is_valid_plate_pattern(cleaned_plat):
+                    st.error("Format nomor plat tidak valid. Masukkan format plat Indonesia yang benar (Contoh: B 1234 XYZ, F 4526 FCF).")
+                else:
+                    curr_active = db_manager.get_currently_parked_vehicles()
+                    already_in = any(normalize_plate(v["plate"]) == normalize_plate(cleaned_plat) for v in curr_active)
+                    if already_in:
+                        st.warning(f"⚠️ Kendaraan dengan plat {format_plate_display(cleaned_plat)} sudah tercatat sedang berada di dalam area parkir kampus!")
+                    else:
+                        kat_val = "Tamu" if "Tamu" in cr_kat else cr_kat
+                        db_manager.record_transaction(
+                            plate=cleaned_plat,
+                            owner_name=cr_nama.strip() or None,
+                            category=kat_val,
+                            fee=0,
+                            gate_direction="IN",
+                            source="Input Manual Petugas",
+                            notes=cr_notes.strip() or None,
+                        )
+                        st.success(f"✅ Kendaraan {format_plate_display(cleaned_plat)} berhasil dicatat masuk (IN)!")
+                        st.toast(f"Kendaraan {format_plate_display(cleaned_plat)} masuk!", icon="🚗")
+                        st.rerun()
+
+    # CRUD 3: EDIT SESI PARKIR (UPDATE)
+    with crud_park3:
+        st.markdown("#### ✏️ Edit Data Sesi Parkir Aktif")
+        st.caption("Koreksi nomor plat (jika terjadi salah baca OCR kamera), ubah nama pemilik, atau perbarui kategori kendaraan yang sedang parkir:")
+
+        active_parked_list = db_manager.get_currently_parked_vehicles()
+        if active_parked_list:
+            upd_choices = {
+                f"#{a['id']} | {format_plate_display(a['plate'])} ({a.get('owner_name') or a.get('category') or 'Tamu'}) - Masuk: {(a.get('created_at') or '')[:16]}": a
+                for a in active_parked_list
+            }
+            sel_upd_label = st.selectbox(
+                "Pilih Kendaraan yang Ingin Diedit:",
+                ["— Pilih Kendaraan —"] + list(upd_choices.keys()),
+                key="sel_active_update_dropdown"
+            )
+
+            if sel_upd_label != "— Pilih Kendaraan —":
+                target_veh = upd_choices[sel_upd_label]
+                with st.form("form_update_active_session"):
+                    col_u1, col_u2 = st.columns(2)
+                    with col_u1:
+                        u_plat = st.text_input("Nomor Plat", value=format_plate_display(target_veh["plate"]))
+                        kat_opts = ["Mahasiswa", "Dosen", "Tamu"]
+                        curr_k = target_veh.get("category") or "Tamu"
+                        k_idx = kat_opts.index(curr_k) if curr_k in kat_opts else 2
+                        u_kat = st.selectbox("Kategori", kat_opts, index=k_idx)
+                    with col_u2:
+                        u_nama = st.text_input("Nama Pemilik", value=target_veh.get("owner_name") or "")
+                        u_notes = st.text_input("Catatan Petugas", value=target_veh.get("notes") or "")
+
+                    btn_save_u = st.form_submit_button("💾 Simpan Perubahan Sesi", type="primary", use_container_width=True)
+                    if btn_save_u:
+                        cleaned_u = disambiguate_plate(u_plat.strip())
+                        if not cleaned_u:
+                            st.error("Nomor plat tidak boleh kosong!")
+                        else:
+                            ok = db_manager.update_transaction(
+                                tx_id=target_veh["id"],
+                                plate=cleaned_u,
+                                owner_name=u_nama.strip() or None,
+                                category=u_kat,
+                                notes=u_notes.strip() or None,
+                            )
+                            if ok:
+                                st.success(f"✅ Sesi kendaraan #{target_veh['id']} berhasil diperbarui!")
+                                st.toast(f"Data {format_plate_display(cleaned_u)} diperbarui!", icon="💾")
+                                st.rerun()
+                            else:
+                                st.error("Gagal memperbarui data sesi.")
+        else:
+            st.info("Saat ini tidak ada kendaraan yang sedang parkir untuk diedit.")
+
+    # CRUD 4: CHECKOUT / HAPUS SESI (DELETE SATU PER SATU)
+    with crud_park4:
+        st.markdown("#### 🗑️ Checkout Keluar atau Hapus Sesi Parkir (Satu per Satu)")
+        st.caption("Pilih kendaraan yang ingin diselesaikan atau dihapus dari daftar parkir aktif secara satu per satu. **Tindakan ini aman dan HANYA berdampak pada 1 kendaraan yang dipilih.**")
+
+        active_parked_list = db_manager.get_currently_parked_vehicles()
+        if active_parked_list:
+            del_choices = {
+                f"#{a['id']} | {format_plate_display(a['plate'])} ({a.get('owner_name') or a.get('category') or 'Tamu'}) - Masuk: {(a.get('created_at') or '')[:16]}": a
+                for a in active_parked_list
+            }
+            sel_del_label = st.selectbox(
+                "Pilih Kendaraan Parkir Aktif:",
+                ["— Pilih Kendaraan —"] + list(del_choices.keys()),
+                key="sel_active_del_tab_dropdown"
+            )
+
+            if sel_del_label != "— Pilih Kendaraan —":
+                chosen_veh = del_choices[sel_del_label]
+
+                st.markdown(f"""
+                <div style="background: rgba(30, 41, 59, 0.7); border: 1.5px solid rgba(255, 255, 255, 0.15); border-radius: 12px; padding: 16px; margin: 12px 0;">
+                    <h4 style="margin:0 0 8px 0; color: #60A5FA;">🚗 Detail Kendaraan Terpilih:</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 0.93rem;">
+                        <div><b>ID Transaksi:</b> #{chosen_veh['id']}</div>
+                        <div><b>Nomor Plat:</b> <span style="font-family: monospace; font-size: 1.1rem; color: #FCD34D;">{format_plate_display(chosen_veh['plate'])}</span></div>
+                        <div><b>Pemilik:</b> {chosen_veh.get('owner_name') or '(Tamu Luar)'}</div>
+                        <div><b>Kategori:</b> {chosen_veh.get('category') or 'Tamu'}</div>
+                        <div><b>Waktu Masuk:</b> {(chosen_veh.get('created_at') or '').replace('T', ' ')}</div>
+                        <div><b>Durasi Berjalan:</b> {chosen_veh.get('duration_text', '-')}</div>
+                        <div><b>Estimasi Tarif:</b> <span style="color: #34D399; font-weight: 700;">{rupiah(chosen_veh.get('current_fee', 0))}</span></div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                c_act_out, c_act_del = st.columns(2)
+                with c_act_out:
+                    st.markdown("##### 🚪 Opsi A: Catat Checkout Keluar (Resmi)")
+                    st.caption("Mencatat transaksi keluar (OUT) resmi, menghitung durasi total, dan mencatat tarif akhir ke laporan keuangan.")
+                    if st.button(f"🚪 Checkout OUT #{chosen_veh['id']} ({format_plate_display(chosen_veh['plate'])})", type="primary", use_container_width=True, key="btn_confirm_checkout_out_one"):
+                        db_manager.checkout_vehicle(chosen_veh["plate"], notes="Checkout Manual Petugas via CRUD Tab")
+                        st.toast(f"Kendaraan {format_plate_display(chosen_veh['plate'])} berhasil dikeluarkan (OUT)!", icon="🚗")
+                        st.rerun()
+                with c_act_del:
+                    st.markdown("##### 🗑️ Opsi B: Hapus Sesi Parkir (Satu per Satu)")
+                    st.caption("Menghapus data sesi parkir ini secara permanen dari sistem (misal data testing kemarin atau salah input). Kendaraan lain tidak terpengaruh.")
+                    if st.button(f"🗑️ Hapus Sesi #{chosen_veh['id']} Saja", type="secondary", use_container_width=True, key="btn_confirm_delete_active_one"):
+                        db_manager.delete_active_parked_sessions(tx_id=chosen_veh["id"])
+                        st.toast(f"Sesi #{chosen_veh['id']} ({format_plate_display(chosen_veh['plate'])}) berhasil dihapus satu per satu!", icon="🗑️")
+                        st.rerun()
+        else:
+            st.success("✅ **Area parkir bersih.** Tidak ada kendaraan yang sedang parkir saat ini.")
 
     st.divider()
 
@@ -1882,17 +2041,9 @@ with tab_history:
             else:
                 st.caption("Tidak ada riwayat untuk dihapus.")
 
-            st.divider()
-            st.markdown("##### 🚨 2. Hapus Semua Sesi Parkir Aktif (Testing)")
-            st.caption("Menghapus seluruh transaksi masuk (IN) yang saat ini tertahan, sehingga jumlah kendaraan terparkir seketika menjadi 0 Unit.")
-            if st.button("🧹 Bersihkan Sesi Parkir Testing", type="secondary", use_container_width=True, key="btn_clean_active_sessions_tab4"):
-                cleared_cnt = db_manager.delete_active_parked_sessions()
-                st.toast(f"Berhasil menghapus {cleared_cnt} sesi parkir aktif testing!", icon="🧹")
-                st.rerun()
-
-        # Opsi 3 & 4: Bersihkan Riwayat Selesai & Reset Total
+        # Opsi 2 & 3: Bersihkan Riwayat Selesai & Reset Total
         with m_col2:
-            st.markdown("##### 🧹 3. Bersihkan Riwayat Selesai (Hanya OUT)")
+            st.markdown("##### 🧹 2. Bersihkan Riwayat Selesai (Hanya OUT)")
             st.caption("Menghapus log transaksi yang kendaraannya sudah keluar (OUT). **Sesi kendaraan yang sedang parkir (IN) tetap aman**.")
             if st.button("🧹 Bersihkan Transaksi Selesai", type="primary", use_container_width=True, key="btn_clean_completed_tx_tab4"):
                 deleted_count = db_manager.delete_completed_transactions()
@@ -1900,7 +2051,7 @@ with tab_history:
                 st.rerun()
 
             st.divider()
-            st.markdown("##### ⚠️ 4. Reset Seluruh Riwayat Database")
+            st.markdown("##### ⚠️ 3. Reset Seluruh Riwayat Database")
             st.caption("Menghapus SELURUH catatan riwayat transaksi di database (reset total riwayat).")
             confirm_reset_all = st.checkbox("Saya yakin ingin menghapus seluruh log transaksi secara permanen", key="chk_confirm_reset_all_tx_tab4")
             if st.button("⚠️ Hapus Seluruh Riwayat", type="secondary", disabled=not confirm_reset_all, use_container_width=True, key="btn_clear_all_tx_danger_tab4"):
