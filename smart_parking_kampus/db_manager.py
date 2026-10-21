@@ -379,6 +379,7 @@ def get_dashboard_metrics(db_path: str = DEFAULT_DB_PATH) -> Dict[str, Any]:
         total_unregistered_tx = conn.execute(
             "SELECT COUNT(*) FROM transactions WHERE category IS NULL OR category LIKE '%Tamu%' OR category = 'Belum terdaftar'"
         ).fetchone()[0]
+        total_out = conn.execute("SELECT COUNT(*) FROM transactions WHERE gate_direction = 'OUT'").fetchone()[0]
 
     currently_parked = get_currently_parked_count(db_path)
 
@@ -389,6 +390,7 @@ def get_dashboard_metrics(db_path: str = DEFAULT_DB_PATH) -> Dict[str, Any]:
         "total_unregistered_inspected": total_unregistered_tx,
         "total_revenue": total_fee,
         "currently_parked": currently_parked,
+        "total_completed_sessions": total_out,
     }
 
 

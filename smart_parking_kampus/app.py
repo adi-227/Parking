@@ -1890,7 +1890,16 @@ with tab_history:
     m3.metric("Total Pemeriksaan", metrics["total_examinations"], help="Total berapa kali palang gerbang dibuka / kendaraan diperiksa oleh AI (termasuk pemeriksaan gerbang Masuk dan Keluar).")
     m4.metric("Civitas Terdaftar", metrics["total_registered_inspected"], help="Berapa kali pemeriksaan melibatkan kendaraan sivitas kampus resmi (Dosen gratis Rp0, Mahasiswa flat Rp2.000).")
     m5.metric("Plat Tamu / Luar", metrics["total_unregistered_inspected"], help="Berapa kali pemeriksaan melibatkan pengunjung luar / belum terdaftar di database.")
-    m6.metric("Total Pendapatan", rupiah(metrics["total_revenue"]), help="Akumulasi tarif parkir resmi yang berhasil dicatat sistem.")
+    
+    tot_out = metrics.get("total_completed_sessions", 0)
+    sesi_info = f"Dari {tot_out} Sesi Selesai" if tot_out > 0 else "0 Sesi Checkout"
+    m6.metric(
+        "Total Pendapatan",
+        rupiah(metrics["total_revenue"]),
+        delta=sesi_info,
+        delta_color="off",
+        help=f"Akumulasi kas parkir dari seluruh sesi checkout ({tot_out} transaksi keluar)."
+    )
 
     # PANDUAN PENJELASAN ISTILAH METRIK
     with st.expander("ℹ️ Penjelasan & Arti Metrik Dashboard (Klik untuk Membaca)", expanded=False):
@@ -2171,6 +2180,7 @@ with tab_history:
             filtered_tx = [t for t in filtered_tx if t.get("gate_direction") == gate_filter_val]
 
         if filtered_tx:
+            st.info("💡 **Petunjuk Log Riwayat**: Transaksi **IN** mencatat karcis masuk (`Rp 0`), sedangkan transaksi **OUT** mencatat durasi parkir aktual dan biaya yang dibayarkan pengendara.")
             for item in filtered_tx:
                 raw_fee = item.get("fee")
                 if item.get("gate_direction") == "IN":
