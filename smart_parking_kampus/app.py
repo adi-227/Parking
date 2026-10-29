@@ -670,11 +670,12 @@ st.markdown(f"""
        ========================================================================== */
     div[data-testid="stMetric"] {{
         background-color: var(--bg-card) !important;
-        padding: 14px 18px !important;
+        padding: 12px 14px !important;
         border-radius: 14px !important;
         border: 1.5px solid var(--border-color) !important;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
         transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+        min-width: 0 !important;
     }}
     div[data-testid="stMetric"]:hover {{
         transform: translateY(-2px) !important;
@@ -685,11 +686,37 @@ st.markdown(f"""
     div[data-testid="stMetric"] [data-testid="stMetricLabel"] span {{
         color: var(--text-secondary) !important;
         font-weight: 600 !important;
-        font-size: 0.85rem !important;
+        font-size: 0.82rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
     }}
-    div[data-testid="stMetric"] [data-testid="stMetricValue"] div {{
+    div[data-testid="stMetric"] [data-testid="stMetricValue"] {{
+        font-size: clamp(1.15rem, 1.4vw, 1.5rem) !important;
+        line-height: 1.25 !important;
+        overflow: visible !important;
+        white-space: nowrap !important;
+    }}
+    div[data-testid="stMetric"] [data-testid="stMetricValue"] > div,
+    div[data-testid="stMetric"] [data-testid="stMetricValue"] span,
+    div[data-testid="stMetric"] [data-testid="stMetricValue"] p {{
         color: var(--text-primary) !important;
         font-weight: 800 !important;
+        font-size: inherit !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        white-space: nowrap !important;
+    }}
+    div[data-testid="stMetric"] [data-testid="stMetricDelta"] {{
+        font-size: 0.74rem !important;
+        font-weight: 600 !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+    }}
+    div[data-testid="stMetric"] [data-testid="stMetricDelta"] > div {{
+        white-space: nowrap !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
     }}
 
     .empty-state-card {{
@@ -1884,7 +1911,7 @@ with tab_history:
     st.subheader("Dashboard & Log Riwayat Transaksi")
 
     metrics = db_manager.get_dashboard_metrics()
-    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    m1, m2, m3, m4, m5, m6 = st.columns([1, 1, 1, 1, 1, 1.45])
     m1.metric("Kendaraan Terdaftar", metrics["total_vehicles_registered"], help="Total kendaraan sivitas (Dosen & Mahasiswa) di database master kampus.")
     m2.metric("Sedang Parkir", f"{metrics['currently_parked']} Unit", help="Jumlah kendaraan yang saat ini masih berada di dalam area parkir kampus (sudah IN tapi belum OUT).")
     m3.metric("Total Pemeriksaan", metrics["total_examinations"], help="Total berapa kali palang gerbang dibuka / kendaraan diperiksa oleh AI (termasuk pemeriksaan gerbang Masuk dan Keluar).")
