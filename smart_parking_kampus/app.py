@@ -1274,7 +1274,7 @@ with tab_gate:
                             eff_conf = max(0.35, min(conf_threshold, 0.50))
                             preds = model.predict(source=img_cv, conf=eff_conf, verbose=False, imgsz=640)
                             ih, iw = img_cv.shape[:2]
-                            candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=iw, frame_h=ih)
+                            candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=iw, frame_h=ih, max_height_ratio=0.88)
                             found = []
                             for box, box_conf, kind in candidates:
                                 x1, y1, x2, y2 = box
@@ -1285,6 +1285,27 @@ with tab_gate:
                                         cleaned = disambiguate_plate(t)
                                         if is_valid_plate_pattern(cleaned):
                                             found.append((cleaned, c))
+
+                            # Fallback 1: Jika kotak YOLO belum menemukan plat valid (misal foto close-up jarak dekat),
+                            # periksa langsung pada citra penuh kamera
+                            if not found:
+                                t_full, c_full, _ = extract_plate_text(reader, img_cv)
+                                if t_full:
+                                    cleaned_full = disambiguate_plate(t_full)
+                                    if is_valid_plate_pattern(cleaned_full):
+                                        found.append((cleaned_full, c_full))
+
+                            # Fallback 2: Coba area tengah (center crop) untuk menghindari background/noise
+                            if not found:
+                                cy1, cy2 = int(ih * 0.10), int(ih * 0.90)
+                                cx1, cx2 = int(iw * 0.05), int(iw * 0.95)
+                                c_crop = img_cv[cy1:cy2, cx1:cx2]
+                                if c_crop.size > 0:
+                                    t_cen, c_cen, _ = extract_plate_text(reader, c_crop)
+                                    if t_cen:
+                                        cleaned_cen = disambiguate_plate(t_cen)
+                                        if is_valid_plate_pattern(cleaned_cen):
+                                            found.append((cleaned_cen, c_cen))
 
                             if found:
                                 best_t, best_c = max(found, key=lambda x: x[1])
@@ -1417,7 +1438,7 @@ with tab_gate:
                             sh, sw = snap.shape[:2]
                             eff_conf = max(0.35, min(conf_threshold, 0.50))
                             preds = model.predict(source=snap, conf=eff_conf, verbose=False, imgsz=640)
-                            candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=sw, frame_h=sh)
+                            candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=sw, frame_h=sh, max_height_ratio=0.88)
                             if not candidates and last_tracked:
                                 candidates = [(last_tracked, 0.50, "tracked_fallback")]
                             found = []
@@ -1430,6 +1451,14 @@ with tab_gate:
                                         cleaned = disambiguate_plate(t)
                                         if is_valid_plate_pattern(cleaned):
                                             found.append((cleaned, c))
+
+                            # Fallback jika belum ada box yang lolos deteksi
+                            if not found:
+                                t_full, c_full, _ = extract_plate_text(reader, snap)
+                                if t_full:
+                                    cleaned_full = disambiguate_plate(t_full)
+                                    if is_valid_plate_pattern(cleaned_full):
+                                        found.append((cleaned_full, c_full))
 
                             if found:
                                 best_t, best_c = max(found, key=lambda x: x[1])

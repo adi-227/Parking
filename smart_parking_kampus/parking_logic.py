@@ -174,14 +174,14 @@ def is_valid_plate_pattern(value: Optional[str]) -> bool:
     return bool(re.match(pattern, norm))
 
 
-def is_plausible_plate_box(x1: int, y1: int, x2: int, y2: int, frame_w: int = 640, frame_h: int = 480) -> bool:
+def is_plausible_plate_box(x1: int, y1: int, x2: int, y2: int, frame_w: int = 640, frame_h: int = 480, max_height_ratio: float = 0.50) -> bool:
     """
     Memverifikasi secara geometris apakah bounding box masuk akal sebagai plat nomor kendaraan.
     Mendukung deteksi langsung dari depan maupun sudut serong (samping kanan / samping kiri hingga 45°):
     - Rasio aspek (width / height) minimal 1.10 dan maksimal 5.8.
       (Plat yang diambil serong dari samping mengalami kompresi lebar secara perspektif sehingga rasio turun ke ~1.15 - 1.45).
     - Telapak tangan vertikal (0.73) dan wajah manusia (0.94) tetap ditolak karena rasio < 1.10.
-    - Tinggi plat tidak boleh melebihi 50% tinggi frame.
+    - Tinggi plat tidak boleh melebihi max_height_ratio frame (default 0.50 untuk video streaming, hingga 0.88 untuk foto close-up).
     - Lebar plat minimal 35 pixel dan tinggi minimal 15 pixel.
     """
     bw = x2 - x1
@@ -198,8 +198,8 @@ def is_plausible_plate_box(x1: int, y1: int, x2: int, y2: int, frame_w: int = 64
     if bw < 35 or bh < 15:
         return False
         
-    # Plat nomor tidak mungkin menutupi lebih dari 50% tinggi frame
-    if frame_h > 0 and bh > (frame_h * 0.50):
+    # Plat nomor tidak mungkin menutupi lebih dari max_height_ratio tinggi frame
+    if frame_h > 0 and bh > (frame_h * max_height_ratio):
         return False
 
     # Plat nomor tidak mungkin menutupi lebih dari 98% lebar frame
@@ -209,10 +209,10 @@ def is_plausible_plate_box(x1: int, y1: int, x2: int, y2: int, frame_w: int = 64
     return True
 
 
-def extract_candidate_plate_boxes(yolo_boxes, frame_w: int = 640, frame_h: int = 480, min_conf: float = 0.30):
+def extract_candidate_plate_boxes(yolo_boxes, frame_w: int = 640, frame_h: int = 480, min_conf: float = 0.30, max_height_ratio: float = 0.88):
     """
     Mengekstrak dan memverifikasi kotak kandidat plat nomor yang valid:
-    1. Plat mobil / motor horizontal standar (depan atau serong) yang lolos is_plausible_plate_box.
+    1. Plat mobil / motor horizontal standar (depan, serong, maupun close-up) yang lolos is_plausible_plate_box.
     2. Plat nomor motor yang terdeteksi bersama spatbor belakang (rasio aspek 0.50 - 1.35).
        Plat nomor motor berada di ~52% bagian atas dari bingkai dudukan tersebut.
     Mengembalikan daftar kandidat terurut confidence: ([x1, y1, x2, y2], conf, kind)
@@ -243,8 +243,8 @@ def extract_candidate_plate_boxes(yolo_boxes, frame_w: int = 640, frame_h: int =
             continue
         ar = bw / float(bh)
 
-        # 1. Plat horizontal langsung (mobil / motor mandiri, depan atau serong)
-        if is_plausible_plate_box(x1, y1, x2, y2, frame_w=frame_w, frame_h=frame_h):
+        # 1. Plat horizontal langsung (mobil / motor mandiri, depan, serong, maupun close-up)
+        if is_plausible_plate_box(x1, y1, x2, y2, frame_w=frame_w, frame_h=frame_h, max_height_ratio=max_height_ratio):
             candidates.append(([x1, y1, x2, y2], conf, "standard"))
             continue
 
@@ -254,7 +254,7 @@ def extract_candidate_plate_boxes(yolo_boxes, frame_w: int = 640, frame_h: int =
             adj_bh = int(bh * 0.52)
             adj_y2 = y1 + adj_bh
             adj_ar = bw / float(adj_bh) if adj_bh > 0 else 0
-            if adj_ar >= 1.50 and is_plausible_plate_box(x1, y1, x2, adj_y2, frame_w=frame_w, frame_h=frame_h):
+            if adj_ar >= 1.50 and is_plausible_plate_box(x1, y1, x2, adj_y2, frame_w=frame_w, frame_h=frame_h, max_height_ratio=max_height_ratio):
                 candidates.append(([x1, y1, x2, adj_y2], conf, "motorcycle_adjusted"))
 
     candidates.sort(key=lambda item: item[1], reverse=True)
