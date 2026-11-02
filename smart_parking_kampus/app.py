@@ -1416,10 +1416,10 @@ with tab_gate:
                         if self.frame_count % step == 0:
                             cands = []
                             try:
-                                eff_live_conf = max(0.20, min(conf_threshold, 0.35))
+                                eff_live_conf = max(0.32, min(conf_threshold, 0.45))
                                 preds = model.predict(source=img, conf=eff_live_conf, verbose=False, imgsz=480)
                                 if preds and len(preds[0].boxes) > 0:
-                                    cands = extract_candidate_plate_boxes(preds[0].boxes, frame_w=w, frame_h=h, min_conf=0.20, max_height_ratio=0.88)
+                                    cands = extract_candidate_plate_boxes(preds[0].boxes, frame_w=w, frame_h=h, min_conf=0.30, max_height_ratio=0.88)
                             except Exception:
                                 cands = []
                             with self.lock:
@@ -1548,14 +1548,32 @@ with tab_gate:
                     async_processing=True,
                 )
 
+                # Inisialisasi atribut secara dinamis jika video_processor dibuat sebelum hot-reload
+                if ctx and ctx.video_processor:
+                    if not hasattr(ctx.video_processor, "auto_scanned_plate"):
+                        setattr(ctx.video_processor, "auto_scanned_plate", None)
+                        setattr(ctx.video_processor, "auto_scanned_conf", 0.0)
+                        setattr(ctx.video_processor, "auto_read_display", "")
+                        setattr(ctx.video_processor, "is_ocr_busy", False)
+                        setattr(ctx.video_processor, "last_ocr_time", 0.0)
+                        setattr(ctx.video_processor, "steady_target_count", 0)
+                        setattr(ctx.video_processor, "cooldown_dict", {})
+
                 # AUTO-SCAN LISTENER:
                 # Memeriksa di background setiap 0.8 detik apakah ada plat yang terdeteksi secara otomatis
                 @st.fragment(run_every=0.8)
                 def live_camera_auto_scanner():
                     if ctx and ctx.video_processor:
-                        with ctx.video_processor.lock:
-                            auto_p = ctx.video_processor.auto_scanned_plate
-                            auto_c = ctx.video_processor.auto_scanned_conf
+                        vp = ctx.video_processor
+                        lock = getattr(vp, "lock", None)
+                        if lock:
+                            with lock:
+                                auto_p = getattr(vp, "auto_scanned_plate", None)
+                                auto_c = getattr(vp, "auto_scanned_conf", 0.0)
+                        else:
+                            auto_p = getattr(vp, "auto_scanned_plate", None)
+                            auto_c = getattr(vp, "auto_scanned_conf", 0.0)
+
                         curr_p = st.session_state.get("current_plate")
                         if auto_p and auto_p != curr_p:
                             st.session_state["current_plate"] = auto_p
