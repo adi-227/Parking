@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import cv2
+import time
 import threading
 import pandas as pd
 import numpy as np
@@ -1373,6 +1374,34 @@ with tab_gate:
                         self.frame_count = 0
                         self.tracker = SmoothBoxTracker(alpha=0.60, max_miss_frames=5)
                         self.current_vtype = "PLAT"
+                        self.auto_scanned_plate = None
+                        self.auto_scanned_conf = 0.0
+                        self.auto_read_display = ""
+                        self.is_ocr_busy = False
+                        self.last_ocr_time = 0.0
+                        self.steady_target_count = 0
+                        self.cooldown_dict = {}
+
+                    def _run_bg_ocr(self, crop_patch):
+                        try:
+                            t, c, _ = extract_plate_text(reader, crop_patch)
+                            if t:
+                                cleaned = disambiguate_plate(t)
+                                if is_valid_plate_pattern(cleaned):
+                                    now = time.time()
+                                    last_scanned = self.cooldown_dict.get(cleaned, 0.0)
+                                    # Cooldown 8 detik agar tidak memicu plat yang sama berulang kali
+                                    if now - last_scanned > 8.0:
+                                        with self.lock:
+                                            self.auto_scanned_plate = cleaned
+                                            self.auto_scanned_conf = float(c)
+                                            self.auto_read_display = format_plate_display(cleaned)
+                                            self.cooldown_dict[cleaned] = now
+                        except Exception:
+                            pass
+                        finally:
+                            with self.lock:
+                                self.is_ocr_busy = False
 
                     def recv(self, frame):
                         img = frame.to_ndarray(format="bgr24")
@@ -1406,6 +1435,24 @@ with tab_gate:
                             with self.lock:
                                 cur_box = self.tracker.get_box()
 
+                        # AUTO-READ OCR DI LATAR BELAKANG:
+                        # Bila ada kotak plat terdeteksi stabil minimal 2 frame, jalankan pembacaan teks otomatis
+                        now = time.time()
+                        if cur_box:
+                            self.steady_target_count += 1
+                        else:
+                            self.steady_target_count = 0
+
+                        if cur_box and self.steady_target_count >= 2 and not self.is_ocr_busy and (now - self.last_ocr_time) >= 0.5:
+                            bx1, by1, bx2, by2 = cur_box
+                            px = int(max(0, bx2 - bx1) * 0.05)
+                            py = int(max(0, by2 - by1) * 0.05)
+                            plate_crop = img[max(0, by1 - py):min(h, by2 + py), max(0, bx1 - px):min(w, bx2 + px)].copy()
+                            if plate_crop.size > 0:
+                                self.is_ocr_busy = True
+                                self.last_ocr_time = now
+                                threading.Thread(target=self._run_bg_ocr, args=(plate_crop,), daemon=True).start()
+
                         if cur_box:
                             x1, y1, x2, y2 = cur_box
                             x1, y1 = max(0, x1), max(0, y1)
@@ -1432,13 +1479,20 @@ with tab_gate:
                             cv2.line(img, (x2, y2), (x2 - c_len, y2), c_color, c_thick)
                             cv2.line(img, (x2, y2), (x2, y2 - c_len), c_color, c_thick)
 
-                            # 3. Badge status ukuran plat (MOBIL vs MOTOR) yang adaptif
+                            # 3. Badge status ukuran plat & hasil auto-read teks OCR secara live
                             vtype = getattr(self, "current_vtype", "PLAT")
-                            badge_text = f"[{vtype}] KLIK SCAN"
+                            disp_text = getattr(self, "auto_read_display", "")
+                            if disp_text:
+                                badge_text = f"[{vtype}] {disp_text} (TERBACA!)"
+                                bg_color = (0, 230, 0)
+                            else:
+                                badge_text = f"[{vtype}] MEMBACA OTOMATIS..."
+                                bg_color = (0, 200, 200)
+
                             t_size = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_SIMPLEX, 0.50, 2)[0]
                             bg_y1 = max(0, y1 - 24)
                             bg_y2 = y1
-                            cv2.rectangle(img, (x1, bg_y1), (min(w, x1 + t_size[0] + 16), bg_y2), (0, 220, 0), -1)
+                            cv2.rectangle(img, (x1, bg_y1), (min(w, x1 + t_size[0] + 16), bg_y2), bg_color, -1)
                             cv2.putText(img, badge_text, (x1 + 6, bg_y1 + 17),
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.50, (0, 0, 0), 2, cv2.LINE_AA)
                         else:
@@ -1468,7 +1522,7 @@ with tab_gate:
 
                         return type(frame).from_ndarray(img, format="bgr24")
 
-                st.info("💡 **Dukungan Multi-Sudut Pos Gerbang**: Kamera dapat diarahkan lurus dari depan maupun **serong dari samping kanan/kiri** (hingga sudut 45°). AI otomatis meluruskan kemiringan plat!")
+                st.success("⚡ **Auto-Scan Aktif**: Arahkan plat nomor ke kamera, AI otomatis mendeteksi kotak hijau dan membaca plat tanpa perlu klik tombol!")
                 
                 # Konfigurasi STUN server Google agar WebRTC lancar tersambung dari browser HP (LAN & Tunnel)
                 RTC_CONFIGURATION = {
@@ -1494,7 +1548,25 @@ with tab_gate:
                     async_processing=True,
                 )
 
-                btn_scan = st.button("📸 SCAN / AMBIL PLAT SEKARANG", type="primary", use_container_width=True)
+                # AUTO-SCAN LISTENER:
+                # Memeriksa di background setiap 0.8 detik apakah ada plat yang terdeteksi secara otomatis
+                @st.fragment(run_every=0.8)
+                def live_camera_auto_scanner():
+                    if ctx and ctx.video_processor:
+                        with ctx.video_processor.lock:
+                            auto_p = ctx.video_processor.auto_scanned_plate
+                            auto_c = ctx.video_processor.auto_scanned_conf
+                        curr_p = st.session_state.get("current_plate")
+                        if auto_p and auto_p != curr_p:
+                            st.session_state["current_plate"] = auto_p
+                            st.session_state["current_conf"] = auto_c
+                            st.session_state["current_source"] = "Kamera Live (Otomatis)"
+                            st.toast(f"Plat terdeteksi otomatis: {format_plate_display(auto_p)}", icon="⚡")
+                            st.rerun(scope="app")
+
+                live_camera_auto_scanner()
+
+                btn_scan = st.button("📸 SCAN MANUAL (JIKA PERLU)", type="secondary", use_container_width=True)
                 if btn_scan and ctx.video_processor:
                     with ctx.video_processor.lock:
                         snap = ctx.video_processor.latest_frame
