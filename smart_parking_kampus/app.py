@@ -1382,6 +1382,14 @@ with tab_gate:
                         self.steady_target_count = 0
                         self.cooldown_dict = {}
 
+                    def reset_scanned(self, plate=None, cooldown_sec=25.0):
+                        with self.lock:
+                            self.auto_scanned_plate = None
+                            self.auto_read_display = ""
+                            self.steady_target_count = 0
+                            if plate:
+                                self.cooldown_dict[plate] = time.time() + cooldown_sec
+
                     def _run_bg_ocr(self, crop_patch):
                         try:
                             t, c, _ = extract_plate_text(reader, crop_patch)
@@ -1389,14 +1397,15 @@ with tab_gate:
                                 cleaned = disambiguate_plate(t)
                                 if is_valid_plate_pattern(cleaned):
                                     now = time.time()
-                                    last_scanned = self.cooldown_dict.get(cleaned, 0.0)
-                                    # Cooldown 8 detik agar tidak memicu plat yang sama berulang kali
-                                    if now - last_scanned > 8.0:
+                                    cooldown_until = self.cooldown_dict.get(cleaned, 0.0)
+                                    # Cooldown: hindari pembacaan berulang jika plat baru saja diproses
+                                    if now >= cooldown_until:
                                         with self.lock:
                                             self.auto_scanned_plate = cleaned
                                             self.auto_scanned_conf = float(c)
                                             self.auto_read_display = format_plate_display(cleaned)
-                                            self.cooldown_dict[cleaned] = now
+                                            # Jeda awal 8 detik agar tidak memicu deteksi ulang sebelum tombol diklik
+                                            self.cooldown_dict[cleaned] = now + 8.0
                         except Exception:
                             pass
                         finally:
@@ -1550,14 +1559,32 @@ with tab_gate:
 
                 # Inisialisasi atribut secara dinamis jika video_processor dibuat sebelum hot-reload
                 if ctx and ctx.video_processor:
-                    if not hasattr(ctx.video_processor, "auto_scanned_plate"):
-                        setattr(ctx.video_processor, "auto_scanned_plate", None)
-                        setattr(ctx.video_processor, "auto_scanned_conf", 0.0)
-                        setattr(ctx.video_processor, "auto_read_display", "")
-                        setattr(ctx.video_processor, "is_ocr_busy", False)
-                        setattr(ctx.video_processor, "last_ocr_time", 0.0)
-                        setattr(ctx.video_processor, "steady_target_count", 0)
-                        setattr(ctx.video_processor, "cooldown_dict", {})
+                    vp = ctx.video_processor
+                    if not hasattr(vp, "auto_scanned_plate"):
+                        setattr(vp, "auto_scanned_plate", None)
+                        setattr(vp, "auto_scanned_conf", 0.0)
+                        setattr(vp, "auto_read_display", "")
+                        setattr(vp, "is_ocr_busy", False)
+                        setattr(vp, "last_ocr_time", 0.0)
+                        setattr(vp, "steady_target_count", 0)
+                        setattr(vp, "cooldown_dict", {})
+                    if not hasattr(vp, "reset_scanned"):
+                        def _dyn_reset(plate=None, cooldown_sec=25.0, _vp=vp):
+                            lock = getattr(_vp, "lock", None)
+                            if lock:
+                                with lock:
+                                    _vp.auto_scanned_plate = None
+                                    _vp.auto_read_display = ""
+                                    _vp.steady_target_count = 0
+                                    if plate and hasattr(_vp, "cooldown_dict"):
+                                        _vp.cooldown_dict[plate] = time.time() + cooldown_sec
+                            else:
+                                _vp.auto_scanned_plate = None
+                                _vp.auto_read_display = ""
+                                _vp.steady_target_count = 0
+                                if plate and hasattr(_vp, "cooldown_dict"):
+                                    _vp.cooldown_dict[plate] = time.time() + cooldown_sec
+                        setattr(vp, "reset_scanned", _dyn_reset)
 
                 # AUTO-SCAN LISTENER:
                 # Memeriksa di background setiap 0.8 detik apakah ada plat yang terdeteksi secara otomatis
@@ -1570,15 +1597,27 @@ with tab_gate:
                             with lock:
                                 auto_p = getattr(vp, "auto_scanned_plate", None)
                                 auto_c = getattr(vp, "auto_scanned_conf", 0.0)
+                                cd_dict = getattr(vp, "cooldown_dict", {})
                         else:
                             auto_p = getattr(vp, "auto_scanned_plate", None)
                             auto_c = getattr(vp, "auto_scanned_conf", 0.0)
+                            cd_dict = getattr(vp, "cooldown_dict", {})
+
+                        # Cek apakah plat masih dalam masa cooldown pasca transaksi / pembatalan
+                        now = time.time()
+                        cd_time = max(
+                            cd_dict.get(auto_p, 0.0) if auto_p else 0.0,
+                            st.session_state.get(f"cooldown_{auto_p}", 0.0) if auto_p else 0.0
+                        )
+                        if auto_p and now < cd_time:
+                            return
 
                         curr_p = st.session_state.get("current_plate")
                         if auto_p and auto_p != curr_p:
                             st.session_state["current_plate"] = auto_p
                             st.session_state["current_conf"] = auto_c
                             st.session_state["current_source"] = "Kamera Live (Otomatis)"
+                            st.session_state.pop("last_success_tx", None)
                             st.toast(f"Plat terdeteksi otomatis: {format_plate_display(auto_p)}", icon="⚡")
                             st.rerun(scope="app")
 
@@ -1650,6 +1689,57 @@ with tab_gate:
         st.markdown("#### 🎫 Langkah 2 & 3: Verifikasi & Aksi Gerbang")
 
         if not active_plate:
+            # TAMPILKAN BANNER SUKSES JIKA TRANSAKSI BARU SAJA BERHASIL
+            last_tx = st.session_state.get("last_success_tx")
+            if last_tx:
+                g_code = last_tx.get("gate", "IN")
+                g_col = "#10b981" if g_code == "IN" else "#2563eb"
+                fee_val = last_tx.get("fee", 0)
+                fee_badge = "Gratis (Rp 0)" if fee_val == 0 else rupiah(fee_val)
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(5,150,105,0.06)); border: 2px solid #10b981; border-radius: 14px; padding: 18px 20px; margin-bottom: 20px; box-shadow: 0 4px 14px rgba(16,185,129,0.15);">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+                        <div style="display:flex; align-items:center; gap: 12px;">
+                            <span style="font-size: 2.2rem;">🟢</span>
+                            <div>
+                                <div style="font-size: 1.15rem; font-weight: 800; color: #059669; letter-spacing: -0.3px;">
+                                    GERBANG {g_code} DIBUKA — PALANG TERANGKAT!
+                                </div>
+                                <div style="font-size: 0.90rem; color: var(--text-secondary); margin-top: 2px;">
+                                    Transaksi <b>#{last_tx.get('id')}</b> ({last_tx.get('owner')} - {last_tx.get('category')}) | Plat <b>{last_tx.get('plate')}</b> | Pukul: <b>{last_tx.get('time')}</b>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="text-align:right;">
+                            <span style="background:{g_col}; color:#ffffff; padding:5px 12px; border-radius:8px; font-weight:700; font-size:0.88rem;">
+                                {fee_badge}
+                            </span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 12px; font-size: 0.82rem; color: #047857; background: rgba(16,185,129,0.15); padding: 8px 12px; border-radius: 8px; display:flex; align-items:center; gap:6px;">
+                        <span>✅</span>
+                        <span><b>Status:</b> Kendaraan dipersilakan lewat. Sistem AI otomatis siap memindai kendaraan berikutnya...</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                col_tx_btn1, col_tx_btn2 = st.columns([1, 1])
+                with col_tx_btn1:
+                    if st.button("✖️ Tutup Notifikasi Gerbang", key="btn_close_tx_banner", type="secondary", use_container_width=True):
+                        st.session_state.pop("last_success_tx", None)
+                        st.rerun()
+                with col_tx_btn2:
+                    if st.button("⚡ Reset Cooldown (Tes Lagi Langsung)", key="btn_reset_cooldown", type="secondary", use_container_width=True):
+                        st.session_state.pop("last_success_tx", None)
+                        for k in list(st.session_state.keys()):
+                            if k.startswith("cooldown_"):
+                                st.session_state.pop(k, None)
+                        if ctx and ctx.video_processor:
+                            if hasattr(ctx.video_processor, "cooldown_dict"):
+                                ctx.video_processor.cooldown_dict.clear()
+                            if hasattr(ctx.video_processor, "reset_scanned"):
+                                ctx.video_processor.reset_scanned()
+                        st.rerun()
+
             # EMPTY STATE (MENUNGGU PEMERIKSAAN)
             st.markdown(f"""
             <div class="empty-state-card">
@@ -1683,6 +1773,11 @@ with tab_gate:
             if st.button("🔄 Pindai Ulang Kendaraan", type="secondary", use_container_width=True):
                 st.session_state["current_plate"] = None
                 st.session_state["last_processed_cam_hash"] = None
+                if ctx and ctx.video_processor:
+                    if hasattr(ctx.video_processor, "reset_scanned"):
+                        ctx.video_processor.reset_scanned()
+                    else:
+                        ctx.video_processor.auto_scanned_plate = None
                 st.rerun()
 
         else:
@@ -1841,12 +1936,39 @@ with tab_gate:
                 btn_cancel = st.button("🔄 Periksa Lain", type="secondary", use_container_width=True)
 
             if btn_cancel:
+                # Set cooldown 15 detik pada plat ini agar kamera tidak langsung memicu lagi jika petugas ingin ganti kendaraan
+                cooldown_expiry = time.time() + 15.0
+                st.session_state[f"cooldown_{cleaned_plat}"] = cooldown_expiry
+                if ctx and ctx.video_processor:
+                    if hasattr(ctx.video_processor, "reset_scanned"):
+                        ctx.video_processor.reset_scanned(cleaned_plat, cooldown_sec=15.0)
+                    else:
+                        ctx.video_processor.auto_scanned_plate = None
+                        if hasattr(ctx.video_processor, "cooldown_dict"):
+                            ctx.video_processor.cooldown_dict[cleaned_plat] = cooldown_expiry
                 st.session_state["current_plate"] = None
                 st.session_state["last_processed_cam_hash"] = None
                 st.rerun()
 
             if btn_open:
                 final_p = cleaned_plat
+
+                # CEGAH TRANSAKSI GANDA / DOUBLE-CLICK:
+                # Jika transaksi untuk plat ini di arah yang sama baru saja dicatat dalam 10 detik terakhir, cegah insert berulang
+                recent_dup = db_manager.check_recent_transaction(final_p, cooldown_seconds=10, gate_direction=gate_code)
+                if recent_dup:
+                    st.warning(f"⚠️ Transaksi untuk plat {format_plate_display(final_p)} baru saja dicatat pada {recent_dup['created_at']}. Palang gerbang sudah terbuka, silakan kendaraan melintas.")
+                    cooldown_expiry = time.time() + 25.0
+                    st.session_state[f"cooldown_{final_p}"] = cooldown_expiry
+                    if ctx and ctx.video_processor:
+                        if hasattr(ctx.video_processor, "reset_scanned"):
+                            ctx.video_processor.reset_scanned(final_p, cooldown_sec=25.0)
+                        else:
+                            ctx.video_processor.auto_scanned_plate = None
+                    st.session_state["current_plate"] = None
+                    st.session_state["last_processed_cam_hash"] = None
+                    st.rerun()
+
                 rec = db_manager.find_vehicle(final_p)
                 active_ent = db_manager.get_active_entry(final_p)
 
@@ -1884,7 +2006,29 @@ with tab_gate:
                     duration_minutes=final_dec.get("duration_minutes", 0),
                     entry_time=final_dec.get("entry_time"),
                 )
-                st.success(f"🎉 Gerbang {final_gate_code} Terbuka! Transaksi #{tx_id} ({final_p}) berhasil dicatat.")
+
+                # Set cooldown 25 detik agar kamera tidak membaca plat yang sama berulang saat kendaraan sedang lewat
+                cooldown_expiry = time.time() + 25.0
+                st.session_state[f"cooldown_{final_p}"] = cooldown_expiry
+                if ctx and ctx.video_processor:
+                    if hasattr(ctx.video_processor, "reset_scanned"):
+                        ctx.video_processor.reset_scanned(final_p, cooldown_sec=25.0)
+                    else:
+                        ctx.video_processor.auto_scanned_plate = None
+                        if hasattr(ctx.video_processor, "cooldown_dict"):
+                            ctx.video_processor.cooldown_dict[final_p] = cooldown_expiry
+
+                # Simpan notifikasi transaksi sukses untuk ditampilkan di banner gerbang
+                st.session_state["last_success_tx"] = {
+                    "id": tx_id,
+                    "plate": format_plate_display(final_p),
+                    "gate": final_gate_code,
+                    "fee": fee_to_save,
+                    "category": final_dec.get("category"),
+                    "owner": final_dec.get("owner_name") or "Pengunjung",
+                    "time": datetime.now().strftime("%H:%M:%S")
+                }
+
                 st.session_state["current_plate"] = None
                 st.session_state["last_processed_cam_hash"] = None
                 st.rerun()
