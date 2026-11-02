@@ -1382,7 +1382,7 @@ with tab_gate:
                         self.steady_target_count = 0
                         self.cooldown_dict = {}
 
-                    def reset_scanned(self, plate=None, cooldown_sec=25.0):
+                    def reset_scanned(self, plate=None, cooldown_sec=6.0):
                         with self.lock:
                             self.auto_scanned_plate = None
                             self.auto_read_display = ""
@@ -1392,20 +1392,18 @@ with tab_gate:
 
                     def _run_bg_ocr(self, crop_patch):
                         try:
-                            t, c, _ = extract_plate_text(reader, crop_patch)
+                            t, c, _ = extract_plate_text(reader, crop_patch, fast_mode=True)
                             if t:
                                 cleaned = disambiguate_plate(t)
                                 if is_valid_plate_pattern(cleaned):
                                     now = time.time()
                                     cooldown_until = self.cooldown_dict.get(cleaned, 0.0)
-                                    # Cooldown: hindari pembacaan berulang jika plat baru saja diproses
+                                    # Cooldown: abaikan hanya jika plat baru saja diproses (buka gerbang)
                                     if now >= cooldown_until:
                                         with self.lock:
                                             self.auto_scanned_plate = cleaned
                                             self.auto_scanned_conf = float(c)
                                             self.auto_read_display = format_plate_display(cleaned)
-                                            # Jeda awal 8 detik agar tidak memicu deteksi ulang sebelum tombol diklik
-                                            self.cooldown_dict[cleaned] = now + 8.0
                         except Exception:
                             pass
                         finally:
@@ -1420,15 +1418,15 @@ with tab_gate:
                         with self.lock:
                             self.latest_frame = img.copy()
 
-                        # Deteksi kotak plat dengan YOLO tiap beberapa frame
-                        step = max(2, min(frame_skip, 4))
+                        # Deteksi kotak plat dengan YOLO tiap 1-2 frame
+                        step = max(1, min(frame_skip, 2))
                         if self.frame_count % step == 0:
                             cands = []
                             try:
-                                eff_live_conf = max(0.32, min(conf_threshold, 0.45))
-                                preds = model.predict(source=img, conf=eff_live_conf, verbose=False, imgsz=480)
+                                eff_live_conf = max(0.20, min(conf_threshold, 0.35))
+                                preds = model.predict(source=img, conf=eff_live_conf, verbose=False, imgsz=416)
                                 if preds and len(preds[0].boxes) > 0:
-                                    cands = extract_candidate_plate_boxes(preds[0].boxes, frame_w=w, frame_h=h, min_conf=0.30, max_height_ratio=0.88)
+                                    cands = extract_candidate_plate_boxes(preds[0].boxes, frame_w=w, frame_h=h, min_conf=0.18, max_height_ratio=0.88)
                             except Exception:
                                 cands = []
                             with self.lock:
@@ -1439,24 +1437,34 @@ with tab_gate:
                                     cw = max(1, bx[2] - bx[0])
                                     ch = max(1, bx[3] - bx[1])
                                     ar = cw / float(ch)
-                                    self.current_vtype = "MOBIL" if ar >= 2.7 else "MOTOR"
+                                    self.current_vtype = "MOBIL" if ar >= 2.6 else "MOTOR"
                         else:
                             with self.lock:
                                 cur_box = self.tracker.get_box()
 
                         # AUTO-READ OCR DI LATAR BELAKANG:
-                        # Bila ada kotak plat terdeteksi stabil minimal 2 frame, jalankan pembacaan teks otomatis
                         now = time.time()
                         if cur_box:
                             self.steady_target_count += 1
                         else:
                             self.steady_target_count = 0
 
-                        if cur_box and self.steady_target_count >= 2 and not self.is_ocr_busy and (now - self.last_ocr_time) >= 0.5:
+                        # Langsung picu pembacaan teks plat seketika pada frame pertama kotak terdeteksi
+                        if cur_box and self.steady_target_count >= 1 and not self.is_ocr_busy and (now - self.last_ocr_time) >= 0.25:
                             bx1, by1, bx2, by2 = cur_box
-                            px = int(max(0, bx2 - bx1) * 0.05)
-                            py = int(max(0, by2 - by1) * 0.05)
-                            plate_crop = img[max(0, by1 - py):min(h, by2 + py), max(0, bx1 - px):min(w, bx2 + px)].copy()
+                            bw = max(1, bx2 - bx1)
+                            bh = max(1, by2 - by1)
+                            ar = bw / float(bh)
+
+                            # Jika plat motor terdeteksi bersama spatbor/dudukan belakang (ar < 1.9), fokuskan crop 60% bagian atas
+                            if ar < 1.9 and self.current_vtype == "MOTOR":
+                                crop_y2 = by1 + int(bh * 0.60)
+                            else:
+                                crop_y2 = by2
+
+                            px = int(bw * 0.04)
+                            py = int(bh * 0.04)
+                            plate_crop = img[max(0, by1 - py):min(h, crop_y2 + py), max(0, bx1 - px):min(w, bx2 + px)].copy()
                             if plate_crop.size > 0:
                                 self.is_ocr_busy = True
                                 self.last_ocr_time = now
@@ -1488,15 +1496,25 @@ with tab_gate:
                             cv2.line(img, (x2, y2), (x2 - c_len, y2), c_color, c_thick)
                             cv2.line(img, (x2, y2), (x2, y2 - c_len), c_color, c_thick)
 
-                            # 3. Badge status ukuran plat & hasil auto-read teks OCR secara live
+                            # 3. Badge status interaktif real-time:
                             vtype = getattr(self, "current_vtype", "PLAT")
                             disp_text = getattr(self, "auto_read_display", "")
-                            if disp_text:
+                            is_busy = getattr(self, "is_ocr_busy", False)
+                            auto_p = getattr(self, "auto_scanned_plate", None)
+                            is_cd = auto_p and (now < self.cooldown_dict.get(auto_p, 0.0))
+
+                            if is_cd:
+                                badge_text = f"[{vtype}] GERBANG TERBUKA (LEWAT)"
+                                bg_color = (0, 200, 0)
+                            elif disp_text:
                                 badge_text = f"[{vtype}] {disp_text} (TERBACA!)"
                                 bg_color = (0, 230, 0)
+                            elif is_busy:
+                                badge_text = f"[{vtype}] ⚡ MEMBACA TEKS PLAT..."
+                                bg_color = (0, 215, 255)
                             else:
-                                badge_text = f"[{vtype}] MEMBACA OTOMATIS..."
-                                bg_color = (0, 200, 200)
+                                badge_text = f"[{vtype}] MENGUNCI TARGET..."
+                                bg_color = (0, 180, 240)
 
                             t_size = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_SIMPLEX, 0.50, 2)[0]
                             bg_y1 = max(0, y1 - 24)
@@ -1518,7 +1536,7 @@ with tab_gate:
                             cv2.line(img, (vx1, vy1), (vx1 + c_len, vy1), c_color, 2)
                             cv2.line(img, (vx1, vy1), (vx1, vy1 + c_len), c_color, 2)
                             cv2.line(img, (vx2, vy1), (vx2 - c_len, vy1), c_color, 2)
-                            cv2.line(img, (vx2, vy1), (vx2 - c_len, vy1), c_color, 2)
+                            cv2.line(img, (vx2, vy1), (vx2, vy1 + c_len), c_color, 2)
                             cv2.line(img, (vx1, vy2), (vx1 + c_len, vy2), c_color, 2)
                             cv2.line(img, (vx1, vy2), (vx1, vy2 - c_len), c_color, 2)
                             cv2.line(img, (vx2, vy2), (vx2 - c_len, vy2), c_color, 2)
@@ -1569,7 +1587,7 @@ with tab_gate:
                         setattr(vp, "steady_target_count", 0)
                         setattr(vp, "cooldown_dict", {})
                     if not hasattr(vp, "reset_scanned"):
-                        def _dyn_reset(plate=None, cooldown_sec=25.0, _vp=vp):
+                        def _dyn_reset(plate=None, cooldown_sec=6.0, _vp=vp):
                             lock = getattr(_vp, "lock", None)
                             if lock:
                                 with lock:
@@ -1587,8 +1605,8 @@ with tab_gate:
                         setattr(vp, "reset_scanned", _dyn_reset)
 
                 # AUTO-SCAN LISTENER:
-                # Memeriksa di background setiap 0.8 detik apakah ada plat yang terdeteksi secara otomatis
-                @st.fragment(run_every=0.8)
+                # Memeriksa di background setiap 0.35 detik secara ultra-responsif
+                @st.fragment(run_every=0.35)
                 def live_camera_auto_scanner():
                     if ctx and ctx.video_processor:
                         vp = ctx.video_processor
@@ -1936,12 +1954,12 @@ with tab_gate:
                 btn_cancel = st.button("🔄 Periksa Lain", type="secondary", use_container_width=True)
 
             if btn_cancel:
-                # Set cooldown 15 detik pada plat ini agar kamera tidak langsung memicu lagi jika petugas ingin ganti kendaraan
-                cooldown_expiry = time.time() + 15.0
+                # Set cooldown 5 detik pada plat ini agar kamera tidak langsung memicu lagi jika petugas ingin ganti kendaraan
+                cooldown_expiry = time.time() + 5.0
                 st.session_state[f"cooldown_{cleaned_plat}"] = cooldown_expiry
                 if ctx and ctx.video_processor:
                     if hasattr(ctx.video_processor, "reset_scanned"):
-                        ctx.video_processor.reset_scanned(cleaned_plat, cooldown_sec=15.0)
+                        ctx.video_processor.reset_scanned(cleaned_plat, cooldown_sec=5.0)
                     else:
                         ctx.video_processor.auto_scanned_plate = None
                         if hasattr(ctx.video_processor, "cooldown_dict"):
@@ -1954,15 +1972,15 @@ with tab_gate:
                 final_p = cleaned_plat
 
                 # CEGAH TRANSAKSI GANDA / DOUBLE-CLICK:
-                # Jika transaksi untuk plat ini di arah yang sama baru saja dicatat dalam 10 detik terakhir, cegah insert berulang
-                recent_dup = db_manager.check_recent_transaction(final_p, cooldown_seconds=10, gate_direction=gate_code)
+                # Jika transaksi untuk plat ini di arah yang sama baru saja dicatat dalam 6 detik terakhir, cegah insert berulang
+                recent_dup = db_manager.check_recent_transaction(final_p, cooldown_seconds=6, gate_direction=gate_code)
                 if recent_dup:
                     st.warning(f"⚠️ Transaksi untuk plat {format_plate_display(final_p)} baru saja dicatat pada {recent_dup['created_at']}. Palang gerbang sudah terbuka, silakan kendaraan melintas.")
-                    cooldown_expiry = time.time() + 25.0
+                    cooldown_expiry = time.time() + 6.0
                     st.session_state[f"cooldown_{final_p}"] = cooldown_expiry
                     if ctx and ctx.video_processor:
                         if hasattr(ctx.video_processor, "reset_scanned"):
-                            ctx.video_processor.reset_scanned(final_p, cooldown_sec=25.0)
+                            ctx.video_processor.reset_scanned(final_p, cooldown_sec=6.0)
                         else:
                             ctx.video_processor.auto_scanned_plate = None
                     st.session_state["current_plate"] = None
@@ -2007,12 +2025,12 @@ with tab_gate:
                     entry_time=final_dec.get("entry_time"),
                 )
 
-                # Set cooldown 25 detik agar kamera tidak membaca plat yang sama berulang saat kendaraan sedang lewat
-                cooldown_expiry = time.time() + 25.0
+                # Set cooldown 6 detik agar palang terbuka aman dan kamera siap memindai kendaraan keluar/berikutnya
+                cooldown_expiry = time.time() + 6.0
                 st.session_state[f"cooldown_{final_p}"] = cooldown_expiry
                 if ctx and ctx.video_processor:
                     if hasattr(ctx.video_processor, "reset_scanned"):
-                        ctx.video_processor.reset_scanned(final_p, cooldown_sec=25.0)
+                        ctx.video_processor.reset_scanned(final_p, cooldown_sec=6.0)
                     else:
                         ctx.video_processor.auto_scanned_plate = None
                         if hasattr(ctx.video_processor, "cooldown_dict"):

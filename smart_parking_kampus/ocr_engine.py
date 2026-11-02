@@ -21,15 +21,18 @@ def preprocess_plate_image(image: np.ndarray) -> np.ndarray:
     else:
         gray = image.copy()
 
-    # 2. Resize proporsional jika plat terlalu kecil agar karakter tajam & terbaca
+    # 2. Resize proporsional: standarisasi tinggi ke ~70-80px agar karakter tajam & EasyOCR sangat cepat
     h, w = gray.shape[:2]
-    if h < 110 or w < 260:
-        scale = max(110.0 / max(h, 1), 260.0 / max(w, 1))
-        scale = min(scale, 3.5)
-        gray = cv2.resize(gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
+    if h < 65 or w < 160:
+        scale = max(65.0 / max(h, 1), 160.0 / max(w, 1))
+        scale = min(scale, 2.5)
+        gray = cv2.resize(gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_LINEAR)
+    elif h > 130:
+        scale = 80.0 / float(h)
+        gray = cv2.resize(gray, (int(w * scale), 80), interpolation=cv2.INTER_AREA)
 
     # 3. CLAHE untuk penyeimbangan kontras dan pencahayaan tidak merata
-    clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(8, 8))
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     enhanced = clahe.apply(gray)
 
     # 4. Sedikit gaussian blur untuk meredam artefak kompresi kamera
@@ -38,34 +41,34 @@ def preprocess_plate_image(image: np.ndarray) -> np.ndarray:
     # 5. Deskewing sudut kemiringan (kamera di tiang samping pos parkir / serong)
     try:
         cur_h, cur_w = denoised.shape[:2]
-        edges = cv2.Canny(denoised, 50, 150)
-        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=28, minLineLength=max(25, int(cur_w * 0.15)), maxLineGap=12)
-        if lines is not None and len(lines) > 0:
-            angles = []
-            for l in lines:
-                coords = l[0] if len(l.shape) > 1 else l
-                x1, y1, x2, y2 = coords
-                dx, dy = x2 - x1, y2 - y1
-                if abs(dx) > 10:
-                    deg = np.degrees(np.arctan2(dy, dx))
-                    if abs(deg) <= 30:
-                        angles.append(deg)
-            if angles:
-                median_ang = float(np.median(angles))
-                if abs(median_ang) >= 2.0:
+        if cur_w > 90 and cur_h > 30:
+            edges = cv2.Canny(denoised, 60, 140)
+            lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=24, minLineLength=max(20, int(cur_w * 0.15)), maxLineGap=8)
+            if lines is not None and len(lines) > 0:
+                angles = []
+                for l in lines:
+                    coords = l[0] if len(l.shape) > 1 else l
+                    x1, y1, x2, y2 = coords
+                    dx, dy = x2 - x1, y2 - y1
+                    if abs(dx) > 12:
+                        deg = np.degrees(np.arctan2(dy, dx))
+                        if 3.0 <= abs(deg) <= 25.0:
+                            angles.append(deg)
+                if angles:
+                    median_ang = float(np.median(angles))
                     M = cv2.getRotationMatrix2D((cur_w // 2, cur_h // 2), median_ang, 1.0)
-                    denoised = cv2.warpAffine(denoised, M, (cur_w, cur_h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+                    denoised = cv2.warpAffine(denoised, M, (cur_w, cur_h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
     except Exception:
         pass
 
     return denoised
 
 
-def extract_plate_text(reader, crop_image: np.ndarray) -> Tuple[str, float, str]:
+def extract_plate_text(reader, crop_image: np.ndarray, fast_mode: bool = False) -> Tuple[str, float, str]:
     """
     Mengekstrak teks dari area plat yang sudah di-crop secara cerdas:
     - Menjalankan pra-pemrosesan kontras & auto-deskewing sudut serong
-    - Mengeksekusi EasyOCR
+    - Mengeksekusi EasyOCR (mendukung fast_mode untuk kamera streaming real-time)
     - Mengabaikan baris tanggal pajak / masa berlaku (misal '09.29') yang sering mendominasi confidence
     - Menggabungkan potongan karakter dari kiri ke kanan jika terpisah beberapa kotak
     - Memilih teks plat nomor kendaraan yang paling lengkap dan sah
@@ -86,17 +89,18 @@ def extract_plate_text(reader, crop_image: np.ndarray) -> Tuple[str, float, str]
         allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -.",
     )
 
-    # 2. Cek apakah ada plat valid; jika belum, coba juga gambar asli (raw)
-    has_valid = any(is_valid_plate_pattern(disambiguate_plate(r[1])) for r in results) if results else False
-    if not has_valid:
-        raw_results = reader.readtext(
-            crop_image,
-            detail=1,
-            paragraph=False,
-            allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -.",
-        )
-        if raw_results:
-            results = list(results) + list(raw_results)
+    # 2. Cek apakah ada plat valid; jika belum dan bukan fast_mode, coba juga gambar asli (raw)
+    if not fast_mode:
+        has_valid = any(is_valid_plate_pattern(disambiguate_plate(r[1])) for r in results) if results else False
+        if not has_valid:
+            raw_results = reader.readtext(
+                crop_image,
+                detail=1,
+                paragraph=False,
+                allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -.",
+            )
+            if raw_results:
+                results = list(results) + list(raw_results)
 
     if not results:
         return "", 0.0, ""

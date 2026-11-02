@@ -209,7 +209,7 @@ def is_plausible_plate_box(x1: int, y1: int, x2: int, y2: int, frame_w: int = 64
     return True
 
 
-def extract_candidate_plate_boxes(yolo_boxes, frame_w: int = 640, frame_h: int = 480, min_conf: float = 0.30, max_height_ratio: float = 0.88):
+def extract_candidate_plate_boxes(yolo_boxes, frame_w: int = 640, frame_h: int = 480, min_conf: float = 0.20, max_height_ratio: float = 0.88):
     """
     Mengekstrak dan memverifikasi kotak kandidat plat nomor yang valid:
     1. Plat mobil / motor horizontal standar (depan, serong, maupun close-up) yang lolos is_plausible_plate_box.
