@@ -101,18 +101,16 @@ def extract_plate_text(reader, crop_image: np.ndarray) -> Tuple[str, float, str]
     if not results:
         return "", 0.0, ""
 
-    h_plate = crop_image.shape[0]
-
     raw_candidates = []
-    main_line_boxes = []
+    valid_boxes = []
 
     for box, text, conf in results:
         clean_t = text.strip()
         if not clean_t:
             continue
 
-        # Abaikan tanggal pajak di bagian bawah plat (misal 09.29, 09 29, 12.28)
-        if re.match(r"^\d{2}[\.\s\-]?\d{2}$", clean_t):
+        # Abaikan baris tanggal pajak / masa berlaku (misal '09.29', '09 29', '12.28', '12-27')
+        if re.match(r"^\d{1,2}[\.\s\-\/]\d{2,4}$", clean_t):
             continue
 
         cy = sum(pt[1] for pt in box) / 4.0
@@ -120,19 +118,43 @@ def extract_plate_text(reader, crop_image: np.ndarray) -> Tuple[str, float, str]
         bh = max(pt[1] for pt in box) - min(pt[1] for pt in box)
 
         raw_candidates.append((clean_t, float(conf), bh))
+        valid_boxes.append((cx, cy, clean_t, float(conf), bh))
 
-        # Jika di baris atas/tengah plat nomor utama (bukan baris tanggal bawah)
-        if cy < (h_plate * 0.72) and conf >= 0.15:
-            main_line_boxes.append((cx, clean_t, float(conf), bh))
+    # Pengelompokan baris teks cerdas (Line Clustering)
+    # Sangat efektif untuk menyatukan potongan karakter (misal 'F' + '4220' + 'FGM' atau 'B' + '6991' + 'JGU')
+    if valid_boxes:
+        avg_h = sum(b[4] for b in valid_boxes) / len(valid_boxes)
+        line_thresh = max(12.0, avg_h * 0.70)
 
-    # Jika karakter terpecah menjadi beberapa kotak (misal 'B' dan '6991' dan 'JGU')
-    # gabungkan dari kiri ke kanan
-    if len(main_line_boxes) > 1:
-        main_line_boxes.sort(key=lambda item: item[0])
-        joined_text = " ".join(item[1] for item in main_line_boxes)
-        avg_conf = sum(item[2] for item in main_line_boxes) / len(main_line_boxes)
-        max_bh = max(item[3] for item in main_line_boxes)
-        raw_candidates.append((joined_text, avg_conf, max_bh))
+        # Kelompokkan kotak-kotak yang selevel ketinggiannya (baris horizontal sama)
+        lines = []
+        sorted_by_y = sorted(valid_boxes, key=lambda b: b[1])
+        for b in sorted_by_y:
+            cx, cy, t, c, bh = b
+            placed = False
+            for l in lines:
+                line_cy = sum(item[1] for item in l) / len(l)
+                if abs(cy - line_cy) <= line_thresh:
+                    l.append(b)
+                    placed = True
+                    break
+            if not placed:
+                lines.append([b])
+
+        # Tiap baris diurutkan dari kiri ke kanan (cx) lalu digabungkan
+        for l in lines:
+            if len(l) > 1:
+                l.sort(key=lambda item: item[0])
+                joined_text = " ".join(item[2] for item in l)
+                avg_conf = sum(item[3] for item in l) / len(l)
+                max_bh = max(item[4] for item in l)
+                raw_candidates.append((joined_text, avg_conf, max_bh))
+
+        # Jika ada multi-baris (misal plat motor), coba juga susun gabungan baris dari atas ke bawah
+        if len(lines) > 1:
+            all_sorted = sorted(valid_boxes, key=lambda b: (int(b[1] // line_thresh), b[0]))
+            joined_all = " ".join(b[2] for b in all_sorted)
+            raw_candidates.append((joined_all, sum(b[3] for b in valid_boxes) / len(valid_boxes), max(b[4] for b in valid_boxes)))
 
     if not raw_candidates:
         return "", 0.0, ""

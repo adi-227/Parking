@@ -1261,20 +1261,35 @@ with tab_gate:
                 else:
                     file_bytes = cam_shot.getvalue()
                     import hashlib
+                    from PIL import Image, ImageOps
+                    import io
                     curr_hash = hashlib.md5(file_bytes).hexdigest()
 
                     # Hanya proses SEKALI saat foto baru diambil (cegah loading terus-menerus / infinite loop rerun!)
                     if st.session_state.get("last_processed_cam_hash") != curr_hash:
                         st.session_state["last_processed_cam_hash"] = curr_hash
-                        img_cv = cv2.imdecode(np.asarray(bytearray(file_bytes), dtype=np.uint8), cv2.IMREAD_COLOR)
+                        
+                        # Auto-orientasi EXIF kamera HP (mencegah foto terbalik / miring 90 derajat saat HP portrait)
+                        try:
+                            pil_img = Image.open(io.BytesIO(file_bytes))
+                            pil_img = ImageOps.exif_transpose(pil_img)
+                            img_cv = cv2.cvtColor(np.array(pil_img.convert("RGB")), cv2.COLOR_RGB2BGR)
+                        except Exception:
+                            img_cv = cv2.imdecode(np.asarray(bytearray(file_bytes), dtype=np.uint8), cv2.IMREAD_COLOR)
+
+                        # Standarisasi resolusi jika foto HP resolusi tinggi (>1280px) agar deteksi YOLO & OCR super tajam & cepat
+                        orig_h, orig_w = img_cv.shape[:2]
+                        if max(orig_h, orig_w) > 1280:
+                            scale_f = 1280.0 / max(orig_h, orig_w)
+                            img_cv = cv2.resize(img_cv, (int(orig_w * scale_f), int(orig_h * scale_f)), interpolation=cv2.INTER_AREA)
 
                         with st.spinner("AI sedang membaca plat nomor dari foto..."):
                             from ocr_engine import extract_plate_text
                             model, reader = get_yolo_and_ocr(DEFAULT_MODEL_PATH)
-                            eff_conf = max(0.35, min(conf_threshold, 0.50))
+                            eff_conf = max(0.20, min(conf_threshold, 0.40))
                             preds = model.predict(source=img_cv, conf=eff_conf, verbose=False, imgsz=640)
                             ih, iw = img_cv.shape[:2]
-                            candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=iw, frame_h=ih, max_height_ratio=0.88)
+                            candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=iw, frame_h=ih, min_conf=0.20, max_height_ratio=0.88)
                             found = []
                             for box, box_conf, kind in candidates:
                                 x1, y1, x2, y2 = box
@@ -1306,6 +1321,15 @@ with tab_gate:
                                         cleaned_cen = disambiguate_plate(t_cen)
                                         if is_valid_plate_pattern(cleaned_cen):
                                             found.append((cleaned_cen, c_cen))
+
+                            # Fallback 3: Coba rotasi 90 derajat jika browser HP tidak menyertakan EXIF
+                            if not found:
+                                rot_90 = cv2.rotate(img_cv, cv2.ROTATE_90_CLOCKWISE)
+                                t_rot, c_rot, _ = extract_plate_text(reader, rot_90)
+                                if t_rot:
+                                    cleaned_rot = disambiguate_plate(t_rot)
+                                    if is_valid_plate_pattern(cleaned_rot):
+                                        found.append((cleaned_rot, c_rot))
 
                             if found:
                                 best_t, best_c = max(found, key=lambda x: x[1])
@@ -1347,7 +1371,8 @@ with tab_gate:
                         self.lock = threading.Lock()
                         self.latest_frame = None
                         self.frame_count = 0
-                        self.tracker = SmoothBoxTracker(alpha=0.65, max_miss_frames=8)
+                        self.tracker = SmoothBoxTracker(alpha=0.60, max_miss_frames=5)
+                        self.current_vtype = "PLAT"
 
                     def recv(self, frame):
                         img = frame.to_ndarray(format="bgr24")
@@ -1362,14 +1387,21 @@ with tab_gate:
                         if self.frame_count % step == 0:
                             cands = []
                             try:
-                                eff_live_conf = max(0.40, conf_threshold)
+                                eff_live_conf = max(0.20, min(conf_threshold, 0.35))
                                 preds = model.predict(source=img, conf=eff_live_conf, verbose=False, imgsz=480)
                                 if preds and len(preds[0].boxes) > 0:
-                                    cands = extract_candidate_plate_boxes(preds[0].boxes, frame_w=w, frame_h=h)
+                                    cands = extract_candidate_plate_boxes(preds[0].boxes, frame_w=w, frame_h=h, min_conf=0.20, max_height_ratio=0.88)
                             except Exception:
                                 cands = []
                             with self.lock:
                                 cur_box = self.tracker.update(cands)
+                                if cands:
+                                    best_c = cands[0]
+                                    bx = best_c[0]
+                                    cw = max(1, bx[2] - bx[0])
+                                    ch = max(1, bx[3] - bx[1])
+                                    ar = cw / float(ch)
+                                    self.current_vtype = "MOBIL" if ar >= 2.7 else "MOTOR"
                         else:
                             with self.lock:
                                 cur_box = self.tracker.get_box()
@@ -1378,17 +1410,37 @@ with tab_gate:
                             x1, y1, x2, y2 = cur_box
                             x1, y1 = max(0, x1), max(0, y1)
                             x2, y2 = min(w, x2), min(h, y2)
-                            # Kotak hijau neon dinamis yang presisi & stabil mengikuti plat nomor
-                            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 240, 0), 3)
+                            bw, bh = max(1, x2 - x1), max(1, y2 - y1)
 
-                            # Badge status bidik plat di atas kotak
-                            badge_text = "BIDIK PLAT (KLIK SCAN)"
-                            t_size = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)[0]
-                            bg_y1 = max(0, y1 - 28)
+                            # 1. Garis utama border hijau neon dinamis menyesuaikan ukuran plat motor/mobil
+                            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+                            # 2. Sudut aksen (corner highlights) tebal di 4 sudut agar presisi mengunci plat
+                            c_len = min(22, max(8, int(min(bw, bh) * 0.28)))
+                            c_thick = 4
+                            c_color = (0, 255, 0)
+                            # Top-left
+                            cv2.line(img, (x1, y1), (x1 + c_len, y1), c_color, c_thick)
+                            cv2.line(img, (x1, y1), (x1, y1 + c_len), c_color, c_thick)
+                            # Top-right
+                            cv2.line(img, (x2, y1), (x2 - c_len, y1), c_color, c_thick)
+                            cv2.line(img, (x2, y1), (x2, y1 + c_len), c_color, c_thick)
+                            # Bottom-left
+                            cv2.line(img, (x1, y2), (x1 + c_len, y2), c_color, c_thick)
+                            cv2.line(img, (x1, y2), (x1, y2 - c_len), c_color, c_thick)
+                            # Bottom-right
+                            cv2.line(img, (x2, y2), (x2 - c_len, y2), c_color, c_thick)
+                            cv2.line(img, (x2, y2), (x2, y2 - c_len), c_color, c_thick)
+
+                            # 3. Badge status ukuran plat (MOBIL vs MOTOR) yang adaptif
+                            vtype = getattr(self, "current_vtype", "PLAT")
+                            badge_text = f"[{vtype}] KLIK SCAN"
+                            t_size = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_SIMPLEX, 0.50, 2)[0]
+                            bg_y1 = max(0, y1 - 24)
                             bg_y2 = y1
-                            cv2.rectangle(img, (x1, bg_y1), (min(w, x1 + t_size[0] + 16), bg_y2), (0, 200, 0), -1)
-                            cv2.putText(img, badge_text, (x1 + 8, bg_y1 + 20),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 2)
+                            cv2.rectangle(img, (x1, bg_y1), (min(w, x1 + t_size[0] + 16), bg_y2), (0, 220, 0), -1)
+                            cv2.putText(img, badge_text, (x1 + 6, bg_y1 + 17),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.50, (0, 0, 0), 2, cv2.LINE_AA)
                         else:
                             # Bila plat belum terarah: Sudut bidik kamera tipis (viewfinder brackets)
                             cx, cy = w // 2, h // 2
@@ -1403,13 +1455,13 @@ with tab_gate:
                             cv2.line(img, (vx1, vy1), (vx1 + c_len, vy1), c_color, 2)
                             cv2.line(img, (vx1, vy1), (vx1, vy1 + c_len), c_color, 2)
                             cv2.line(img, (vx2, vy1), (vx2 - c_len, vy1), c_color, 2)
-                            cv2.line(img, (vx2, vy1), (vx2, vy1 + c_len), c_color, 2)
+                            cv2.line(img, (vx2, vy1), (vx2 - c_len, vy1), c_color, 2)
                             cv2.line(img, (vx1, vy2), (vx1 + c_len, vy2), c_color, 2)
                             cv2.line(img, (vx1, vy2), (vx1, vy2 - c_len), c_color, 2)
                             cv2.line(img, (vx2, vy2), (vx2 - c_len, vy2), c_color, 2)
                             cv2.line(img, (vx2, vy2), (vx2, vy2 - c_len), c_color, 2)
 
-                            guide_lbl = "Arahkan plat (depan / serong kanan / kiri)"
+                            guide_lbl = "Arahkan kamera ke plat motor / mobil"
                             g_size = cv2.getTextSize(guide_lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)[0]
                             cv2.putText(img, guide_lbl, (cx - g_size[0] // 2, max(22, vy1 - 10)),
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, c_color, 1, cv2.LINE_AA)
@@ -1417,12 +1469,26 @@ with tab_gate:
                         return type(frame).from_ndarray(img, format="bgr24")
 
                 st.info("💡 **Dukungan Multi-Sudut Pos Gerbang**: Kamera dapat diarahkan lurus dari depan maupun **serong dari samping kanan/kiri** (hingga sudut 45°). AI otomatis meluruskan kemiringan plat!")
+                
+                # Konfigurasi STUN server Google agar WebRTC lancar tersambung dari browser HP (LAN & Tunnel)
+                RTC_CONFIGURATION = {
+                    "iceServers": [
+                        {"urls": ["stun:stun.l.google.com:19302"]},
+                        {"urls": ["stun:global.stun.twilio.com:3478"]}
+                    ]
+                }
                 ctx = webrtc_streamer(
                     key="gate-camera-stream",
                     mode=WebRtcMode.SENDRECV,
+                    rtc_configuration=RTC_CONFIGURATION,
                     video_processor_factory=LiveCameraProcessor,
                     media_stream_constraints={
-                        "video": {"width": {"ideal": 640}, "height": {"ideal": 480}, "frameRate": {"ideal": 30}},
+                        "video": {
+                            "facingMode": {"ideal": "environment"},
+                            "width": {"ideal": 640},
+                            "height": {"ideal": 480},
+                            "frameRate": {"ideal": 30}
+                        },
                         "audio": False
                     },
                     async_processing=True,
@@ -1436,9 +1502,9 @@ with tab_gate:
                     if snap is not None:
                         with st.spinner("AI sedang memeriksa plat nomor kendaraan..."):
                             sh, sw = snap.shape[:2]
-                            eff_conf = max(0.35, min(conf_threshold, 0.50))
+                            eff_conf = max(0.20, min(conf_threshold, 0.40))
                             preds = model.predict(source=snap, conf=eff_conf, verbose=False, imgsz=640)
-                            candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=sw, frame_h=sh, max_height_ratio=0.88)
+                            candidates = extract_candidate_plate_boxes(preds[0].boxes if preds else [], frame_w=sw, frame_h=sh, min_conf=0.20, max_height_ratio=0.88)
                             if not candidates and last_tracked:
                                 candidates = [(last_tracked, 0.50, "tracked_fallback")]
                             found = []
@@ -1452,13 +1518,25 @@ with tab_gate:
                                         if is_valid_plate_pattern(cleaned):
                                             found.append((cleaned, c))
 
-                            # Fallback jika belum ada box yang lolos deteksi
+                            # Fallback 1: periksa citra utuh jika candidate belum terbaca
                             if not found:
                                 t_full, c_full, _ = extract_plate_text(reader, snap)
                                 if t_full:
                                     cleaned_full = disambiguate_plate(t_full)
                                     if is_valid_plate_pattern(cleaned_full):
                                         found.append((cleaned_full, c_full))
+
+                            # Fallback 2: coba center crop
+                            if not found:
+                                cy1, cy2 = int(sh * 0.10), int(sh * 0.90)
+                                cx1, cx2 = int(sw * 0.05), int(sw * 0.95)
+                                s_crop = snap[cy1:cy2, cx1:cx2]
+                                if s_crop.size > 0:
+                                    t_cen, c_cen, _ = extract_plate_text(reader, s_crop)
+                                    if t_cen:
+                                        cleaned_cen = disambiguate_plate(t_cen)
+                                        if is_valid_plate_pattern(cleaned_cen):
+                                            found.append((cleaned_cen, c_cen))
 
                             if found:
                                 best_t, best_c = max(found, key=lambda x: x[1])

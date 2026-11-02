@@ -325,23 +325,18 @@ class SmoothBoxTracker:
                     best_iou = iou
                     best_cand_box = cand_box
 
-            # Jika kandidat memiliki overlap spasial yang cukup (> 0.15) dengan box yang sedang dilacak,
+            # Jika kandidat memiliki overlap spasial yang cukup (> 0.08) dengan box yang sedang dilacak,
             # pertahankan pelacakan objek ini dengan EMA smoothing (anti-jitter)
-            if best_iou > 0.15 and best_cand_box is not None:
+            if best_iou > 0.08 and best_cand_box is not None:
                 best_box = best_cand_box
                 self.miss_count = 0
             else:
-                # Objek baru berada di lokasi berbeda! Jangan langsung tarik kotak melintasi layar!
-                self.miss_count += 1
-                if self.miss_count <= self.max_miss_frames:
-                    # Pertahankan posisi kotak yang lama agar tidak mental-mental
-                    return self.get_box()
-                else:
-                    # Objek lama sudah hilang, switch ke target baru dan reset smoothing
-                    first = candidates[0]
-                    best_box = first[0] if isinstance(first, (list, tuple)) else first
-                    self.smoothed_box = None
-                    self.miss_count = 0
+                # Objek berpindah atau kamera digerakkan ke plat baru:
+                # Langsung ikuti kandidat terkuat secara instan tanpa tertahan di posisi lama
+                first = candidates[0]
+                best_box = first[0] if isinstance(first, (list, tuple)) else first
+                self.smoothed_box = None
+                self.miss_count = 0
         else:
             first = candidates[0]
             best_box = first[0] if isinstance(first, (list, tuple)) else first
