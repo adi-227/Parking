@@ -1371,22 +1371,28 @@ with tab_gate:
                     def __init__(self):
                         self.lock = threading.Lock()
                         self.latest_frame = None
-                        self.frame_count = 0
                         self.tracker = SmoothBoxTracker(alpha=0.60, max_miss_frames=5)
+                        self.cur_box = None
                         self.current_vtype = "PLAT"
                         self.auto_scanned_plate = None
                         self.auto_scanned_conf = 0.0
                         self.auto_read_display = ""
                         self.is_ocr_busy = False
                         self.last_ocr_time = 0.0
-                        self.steady_target_count = 0
                         self.cooldown_dict = {}
+                        self.running = True
+
+                        # Worker background independen: memisahkan pemrosesan AI dari thread render video WebRTC
+                        self.worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
+                        self.worker_thread.start()
 
                     def reset_scanned(self, plate=None, cooldown_sec=6.0):
                         with self.lock:
                             self.auto_scanned_plate = None
                             self.auto_read_display = ""
-                            self.steady_target_count = 0
+                            self.cur_box = None
+                            if hasattr(self, "tracker"):
+                                self.tracker.reset()
                             if plate:
                                 self.cooldown_dict[plate] = time.time() + cooldown_sec
 
@@ -1397,10 +1403,9 @@ with tab_gate:
                                 cleaned = disambiguate_plate(t)
                                 if is_valid_plate_pattern(cleaned):
                                     now = time.time()
-                                    cooldown_until = self.cooldown_dict.get(cleaned, 0.0)
-                                    # Cooldown: abaikan hanya jika plat baru saja diproses (buka gerbang)
-                                    if now >= cooldown_until:
-                                        with self.lock:
+                                    with self.lock:
+                                        cooldown_until = self.cooldown_dict.get(cleaned, 0.0)
+                                        if now >= cooldown_until:
                                             self.auto_scanned_plate = cleaned
                                             self.auto_scanned_conf = float(c)
                                             self.auto_read_display = format_plate_display(cleaned)
@@ -1410,27 +1415,37 @@ with tab_gate:
                             with self.lock:
                                 self.is_ocr_busy = False
 
-                    def recv(self, frame):
-                        img = frame.to_ndarray(format="bgr24")
-                        self.frame_count += 1
-                        h, w = img.shape[:2]
+                    def _worker_loop(self):
+                        while getattr(self, "running", True):
+                            snap = None
+                            with self.lock:
+                                if self.latest_frame is not None:
+                                    snap = self.latest_frame.copy()
 
-                        with self.lock:
-                            self.latest_frame = img.copy()
+                            if snap is None:
+                                time.sleep(0.04)
+                                continue
 
-                        # Deteksi kotak plat dengan YOLO tiap 1-2 frame
-                        step = max(1, min(frame_skip, 2))
-                        if self.frame_count % step == 0:
+                            # Jika OCR sedang berlangsung, berikan 100% CPU untuk OCR agar selesai dalam ~200ms
+                            is_busy = False
+                            with self.lock:
+                                is_busy = self.is_ocr_busy
+                            if is_busy:
+                                time.sleep(0.05)
+                                continue
+
+                            h, w = snap.shape[:2]
                             cands = []
                             try:
-                                eff_live_conf = max(0.20, min(conf_threshold, 0.35))
-                                preds = model.predict(source=img, conf=eff_live_conf, verbose=False, imgsz=416)
+                                eff_live_conf = max(0.18, min(conf_threshold, 0.35))
+                                preds = model.predict(source=snap, conf=eff_live_conf, verbose=False, imgsz=384)
                                 if preds and len(preds[0].boxes) > 0:
                                     cands = extract_candidate_plate_boxes(preds[0].boxes, frame_w=w, frame_h=h, min_conf=0.18, max_height_ratio=0.88)
                             except Exception:
                                 cands = []
+
                             with self.lock:
-                                cur_box = self.tracker.update(cands)
+                                self.cur_box = self.tracker.update(cands)
                                 if cands:
                                     best_c = cands[0]
                                     bx = best_c[0]
@@ -1438,37 +1453,49 @@ with tab_gate:
                                     ch = max(1, bx[3] - bx[1])
                                     ar = cw / float(ch)
                                     self.current_vtype = "MOBIL" if ar >= 2.6 else "MOTOR"
-                        else:
-                            with self.lock:
-                                cur_box = self.tracker.get_box()
+                                box = self.cur_box
+                                vtype = self.current_vtype
+                                is_busy = self.is_ocr_busy
 
-                        # AUTO-READ OCR DI LATAR BELAKANG:
-                        now = time.time()
-                        if cur_box:
-                            self.steady_target_count += 1
-                        else:
-                            self.steady_target_count = 0
+                            # Jalankan OCR seketika jika kotak plat terdeteksi
+                            now = time.time()
+                            if box and not is_busy and (now - self.last_ocr_time) >= 0.20:
+                                bx1, by1, bx2, by2 = box
+                                bw = max(1, bx2 - bx1)
+                                bh = max(1, by2 - by1)
+                                ar = bw / float(bh)
 
-                        # Langsung picu pembacaan teks plat seketika pada frame pertama kotak terdeteksi
-                        if cur_box and self.steady_target_count >= 1 and not self.is_ocr_busy and (now - self.last_ocr_time) >= 0.25:
-                            bx1, by1, bx2, by2 = cur_box
-                            bw = max(1, bx2 - bx1)
-                            bh = max(1, by2 - by1)
-                            ar = bw / float(bh)
+                                # Plat motor: jika terdeteksi beserta dudukan spatbor (ar < 1.9), crop 60% bagian atas
+                                if ar < 1.9 and vtype == "MOTOR":
+                                    crop_y2 = by1 + int(bh * 0.60)
+                                else:
+                                    crop_y2 = by2
 
-                            # Jika plat motor terdeteksi bersama spatbor/dudukan belakang (ar < 1.9), fokuskan crop 60% bagian atas
-                            if ar < 1.9 and self.current_vtype == "MOTOR":
-                                crop_y2 = by1 + int(bh * 0.60)
-                            else:
-                                crop_y2 = by2
+                                px = int(bw * 0.04)
+                                py = int(bh * 0.04)
+                                plate_crop = snap[max(0, by1 - py):min(h, crop_y2 + py), max(0, bx1 - px):min(w, bx2 + px)].copy()
+                                if plate_crop.size > 0:
+                                    with self.lock:
+                                        self.is_ocr_busy = True
+                                    self.last_ocr_time = now
+                                    threading.Thread(target=self._run_bg_ocr, args=(plate_crop,), daemon=True).start()
 
-                            px = int(bw * 0.04)
-                            py = int(bh * 0.04)
-                            plate_crop = img[max(0, by1 - py):min(h, crop_y2 + py), max(0, bx1 - px):min(w, bx2 + px)].copy()
-                            if plate_crop.size > 0:
-                                self.is_ocr_busy = True
-                                self.last_ocr_time = now
-                                threading.Thread(target=self._run_bg_ocr, args=(plate_crop,), daemon=True).start()
+                            time.sleep(0.04)
+
+                    def recv(self, frame):
+                        # Eksekusi instan (<1ms): bebas buffer antrean dan bebas lag
+                        img = frame.to_ndarray(format="bgr24")
+                        h, w = img.shape[:2]
+
+                        with self.lock:
+                            self.latest_frame = img.copy()
+                            cur_box = self.cur_box
+                            vtype = self.current_vtype
+                            disp_text = self.auto_read_display
+                            is_busy = self.is_ocr_busy
+                            auto_p = self.auto_scanned_plate
+                            now = time.time()
+                            is_cd = auto_p and (now < self.cooldown_dict.get(auto_p, 0.0))
 
                         if cur_box:
                             x1, y1, x2, y2 = cur_box
@@ -1578,14 +1605,22 @@ with tab_gate:
                 # Inisialisasi atribut secara dinamis jika video_processor dibuat sebelum hot-reload
                 if ctx and ctx.video_processor:
                     vp = ctx.video_processor
+                    if not hasattr(vp, "cur_box"):
+                        setattr(vp, "cur_box", None)
                     if not hasattr(vp, "auto_scanned_plate"):
                         setattr(vp, "auto_scanned_plate", None)
                         setattr(vp, "auto_scanned_conf", 0.0)
                         setattr(vp, "auto_read_display", "")
                         setattr(vp, "is_ocr_busy", False)
                         setattr(vp, "last_ocr_time", 0.0)
-                        setattr(vp, "steady_target_count", 0)
                         setattr(vp, "cooldown_dict", {})
+                    if not hasattr(vp, "running"):
+                        setattr(vp, "running", True)
+                    if not hasattr(vp, "worker_thread") or not getattr(vp, "worker_thread", None) or not vp.worker_thread.is_alive():
+                        if hasattr(vp, "_worker_loop"):
+                            worker = threading.Thread(target=vp._worker_loop, daemon=True)
+                            setattr(vp, "worker_thread", worker)
+                            worker.start()
                     if not hasattr(vp, "reset_scanned"):
                         def _dyn_reset(plate=None, cooldown_sec=6.0, _vp=vp):
                             lock = getattr(_vp, "lock", None)
@@ -1593,20 +1628,24 @@ with tab_gate:
                                 with lock:
                                     _vp.auto_scanned_plate = None
                                     _vp.auto_read_display = ""
-                                    _vp.steady_target_count = 0
+                                    _vp.cur_box = None
+                                    if hasattr(_vp, "tracker"):
+                                        _vp.tracker.reset()
                                     if plate and hasattr(_vp, "cooldown_dict"):
                                         _vp.cooldown_dict[plate] = time.time() + cooldown_sec
                             else:
                                 _vp.auto_scanned_plate = None
                                 _vp.auto_read_display = ""
-                                _vp.steady_target_count = 0
+                                _vp.cur_box = None
+                                if hasattr(_vp, "tracker"):
+                                    _vp.tracker.reset()
                                 if plate and hasattr(_vp, "cooldown_dict"):
                                     _vp.cooldown_dict[plate] = time.time() + cooldown_sec
                         setattr(vp, "reset_scanned", _dyn_reset)
 
                 # AUTO-SCAN LISTENER:
-                # Memeriksa di background setiap 0.35 detik secara ultra-responsif
-                @st.fragment(run_every=0.35)
+                # Memeriksa di background setiap 0.45 detik secara ultra-responsif
+                @st.fragment(run_every=0.45)
                 def live_camera_auto_scanner():
                     if ctx and ctx.video_processor:
                         vp = ctx.video_processor
