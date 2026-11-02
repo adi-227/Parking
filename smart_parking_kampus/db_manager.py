@@ -84,6 +84,18 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
         # Koreksi migrasi: pastikan seluruh sesi masuk (IN) tercatat fee = 0 (karcis masuk, ditagih saat OUT)
         conn.execute("UPDATE transactions SET fee = 0 WHERE gate_direction = 'IN' AND fee > 0")
 
+        # Inisialisasi data sampel sivitas kampus resmi pada database utama agar langsung valid saat di-scan
+        if os.path.abspath(db_path) == os.path.abspath(DEFAULT_DB_PATH):
+            conn.execute("""
+                INSERT OR IGNORE INTO vehicles (plate, owner_name, category, created_at)
+                VALUES 
+                    ('B 6991 JGU', 'Randra (Mahasiswa)', 'Mahasiswa', '2026-11-02T17:00:00'),
+                    ('B 6802 JPN', 'Fikri (Mahasiswa)', 'Mahasiswa', '2026-10-12T17:15:00'),
+                    ('F 4526 FCF', 'Dr. Ahmad Suhendar', 'Dosen', '2026-10-12T17:15:00'),
+                    ('D 1234 ABC', 'Prof. Hendra Wijaya', 'Dosen', '2026-10-12T17:15:00'),
+                    ('B 1234 XYZ', 'Budi Santoso', 'Mahasiswa', '2026-10-12T17:15:00')
+            """)
+
 
 def upsert_vehicle(plate: str, owner_name: str, category: str, db_path: str = DEFAULT_DB_PATH) -> Tuple[bool, str]:
     """

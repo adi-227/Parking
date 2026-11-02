@@ -1230,6 +1230,7 @@ with tab_gate:
     </div>
     """, unsafe_allow_html=True)
 
+    ctx = None
     col_input, col_verify = st.columns([1.1, 1.25], gap="medium")
 
     # --------------------------------------------------------------------------
@@ -1394,7 +1395,14 @@ with tab_gate:
                             if hasattr(self, "tracker"):
                                 self.tracker.reset()
                             if plate:
-                                self.cooldown_dict[plate] = time.time() + cooldown_sec
+                                exp = time.time() + cooldown_sec
+                                norm = normalize_plate(plate)
+                                disp = format_plate_display(plate)
+                                self.cooldown_dict[plate] = exp
+                                if norm:
+                                    self.cooldown_dict[norm] = exp
+                                if disp:
+                                    self.cooldown_dict[disp] = exp
 
                     def _run_bg_ocr(self, crop_patch):
                         try:
@@ -1402,9 +1410,13 @@ with tab_gate:
                             if t:
                                 cleaned = disambiguate_plate(t)
                                 if is_valid_plate_pattern(cleaned):
+                                    norm_c = normalize_plate(cleaned)
                                     now = time.time()
                                     with self.lock:
-                                        cooldown_until = self.cooldown_dict.get(cleaned, 0.0)
+                                        cooldown_until = max(
+                                            self.cooldown_dict.get(cleaned, 0.0),
+                                            self.cooldown_dict.get(norm_c, 0.0) if norm_c else 0.0
+                                        )
                                         if now >= cooldown_until:
                                             self.auto_scanned_plate = cleaned
                                             self.auto_scanned_conf = float(c)
@@ -1495,7 +1507,10 @@ with tab_gate:
                             is_busy = self.is_ocr_busy
                             auto_p = self.auto_scanned_plate
                             now = time.time()
-                            is_cd = auto_p and (now < self.cooldown_dict.get(auto_p, 0.0))
+                            norm_auto = normalize_plate(auto_p) if auto_p else ""
+                            is_cd = auto_p and (
+                                now < max(self.cooldown_dict.get(auto_p, 0.0), self.cooldown_dict.get(norm_auto, 0.0) if norm_auto else 0.0)
+                            )
 
                         if cur_box:
                             x1, y1, x2, y2 = cur_box
@@ -1528,7 +1543,10 @@ with tab_gate:
                             disp_text = getattr(self, "auto_read_display", "")
                             is_busy = getattr(self, "is_ocr_busy", False)
                             auto_p = getattr(self, "auto_scanned_plate", None)
-                            is_cd = auto_p and (now < self.cooldown_dict.get(auto_p, 0.0))
+                            norm_auto = normalize_plate(auto_p) if auto_p else ""
+                            is_cd = auto_p and (
+                                now < max(self.cooldown_dict.get(auto_p, 0.0), self.cooldown_dict.get(norm_auto, 0.0) if norm_auto else 0.0)
+                            )
 
                             if is_cd:
                                 badge_text = f"[{vtype}] GERBANG TERBUKA (LEWAT)"
@@ -1632,7 +1650,14 @@ with tab_gate:
                                     if hasattr(_vp, "tracker"):
                                         _vp.tracker.reset()
                                     if plate and hasattr(_vp, "cooldown_dict"):
-                                        _vp.cooldown_dict[plate] = time.time() + cooldown_sec
+                                        exp = time.time() + cooldown_sec
+                                        norm = normalize_plate(plate)
+                                        disp = format_plate_display(plate)
+                                        _vp.cooldown_dict[plate] = exp
+                                        if norm:
+                                            _vp.cooldown_dict[norm] = exp
+                                        if disp:
+                                            _vp.cooldown_dict[disp] = exp
                             else:
                                 _vp.auto_scanned_plate = None
                                 _vp.auto_read_display = ""
@@ -1640,45 +1665,15 @@ with tab_gate:
                                 if hasattr(_vp, "tracker"):
                                     _vp.tracker.reset()
                                 if plate and hasattr(_vp, "cooldown_dict"):
-                                    _vp.cooldown_dict[plate] = time.time() + cooldown_sec
+                                    exp = time.time() + cooldown_sec
+                                    norm = normalize_plate(plate)
+                                    disp = format_plate_display(plate)
+                                    _vp.cooldown_dict[plate] = exp
+                                    if norm:
+                                        _vp.cooldown_dict[norm] = exp
+                                    if disp:
+                                        _vp.cooldown_dict[disp] = exp
                         setattr(vp, "reset_scanned", _dyn_reset)
-
-                # AUTO-SCAN LISTENER:
-                # Memeriksa di background setiap 0.45 detik secara ultra-responsif
-                @st.fragment(run_every=0.45)
-                def live_camera_auto_scanner():
-                    if ctx and ctx.video_processor:
-                        vp = ctx.video_processor
-                        lock = getattr(vp, "lock", None)
-                        if lock:
-                            with lock:
-                                auto_p = getattr(vp, "auto_scanned_plate", None)
-                                auto_c = getattr(vp, "auto_scanned_conf", 0.0)
-                                cd_dict = getattr(vp, "cooldown_dict", {})
-                        else:
-                            auto_p = getattr(vp, "auto_scanned_plate", None)
-                            auto_c = getattr(vp, "auto_scanned_conf", 0.0)
-                            cd_dict = getattr(vp, "cooldown_dict", {})
-
-                        # Cek apakah plat masih dalam masa cooldown pasca transaksi / pembatalan
-                        now = time.time()
-                        cd_time = max(
-                            cd_dict.get(auto_p, 0.0) if auto_p else 0.0,
-                            st.session_state.get(f"cooldown_{auto_p}", 0.0) if auto_p else 0.0
-                        )
-                        if auto_p and now < cd_time:
-                            return
-
-                        curr_p = st.session_state.get("current_plate")
-                        if auto_p and auto_p != curr_p:
-                            st.session_state["current_plate"] = auto_p
-                            st.session_state["current_conf"] = auto_c
-                            st.session_state["current_source"] = "Kamera Live (Otomatis)"
-                            st.session_state.pop("last_success_tx", None)
-                            st.toast(f"Plat terdeteksi otomatis: {format_plate_display(auto_p)}", icon="⚡")
-                            st.rerun(scope="app")
-
-                live_camera_auto_scanner()
 
                 btn_scan = st.button("📸 SCAN MANUAL (JIKA PERLU)", type="secondary", use_container_width=True)
                 if btn_scan and ctx.video_processor:
@@ -1745,350 +1740,397 @@ with tab_gate:
     with col_verify:
         st.markdown("#### 🎫 Langkah 2 & 3: Verifikasi & Aksi Gerbang")
 
-        if not active_plate:
-            # TAMPILKAN BANNER SUKSES JIKA TRANSAKSI BARU SAJA BERHASIL
-            last_tx = st.session_state.get("last_success_tx")
-            if last_tx:
-                g_code = last_tx.get("gate", "IN")
-                g_col = "#10b981" if g_code == "IN" else "#2563eb"
-                fee_val = last_tx.get("fee", 0)
-                fee_badge = "Gratis (Rp 0)" if fee_val == 0 else rupiah(fee_val)
-                st.markdown(f"""
-                <div style="background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(5,150,105,0.06)); border: 2px solid #10b981; border-radius: 14px; padding: 18px 20px; margin-bottom: 20px; box-shadow: 0 4px 14px rgba(16,185,129,0.15);">
-                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
-                        <div style="display:flex; align-items:center; gap: 12px;">
-                            <span style="font-size: 2.2rem;">🟢</span>
-                            <div>
-                                <div style="font-size: 1.15rem; font-weight: 800; color: #059669; letter-spacing: -0.3px;">
-                                    GERBANG {g_code} DIBUKA — PALANG TERANGKAT!
-                                </div>
-                                <div style="font-size: 0.90rem; color: var(--text-secondary); margin-top: 2px;">
-                                    Transaksi <b>#{last_tx.get('id')}</b> ({last_tx.get('owner')} - {last_tx.get('category')}) | Plat <b>{last_tx.get('plate')}</b> | Pukul: <b>{last_tx.get('time')}</b>
+        poll_sec = 0.25 if mode_input == "📹 Kamera Live (Streaming WebRTC)" else None
+
+        @st.fragment(run_every=poll_sec)
+        def render_verification_panel():
+            # 1. Cek instan dari WebRTC video processor jika menggunakan kamera streaming live
+            if ctx and getattr(ctx, "video_processor", None):
+                vp = ctx.video_processor
+                lock = getattr(vp, "lock", None)
+                if lock:
+                    with lock:
+                        auto_p = getattr(vp, "auto_scanned_plate", None)
+                        auto_c = getattr(vp, "auto_scanned_conf", 0.0)
+                        cd_dict = getattr(vp, "cooldown_dict", {})
+                else:
+                    auto_p = getattr(vp, "auto_scanned_plate", None)
+                    auto_c = getattr(vp, "auto_scanned_conf", 0.0)
+                    cd_dict = getattr(vp, "cooldown_dict", {})
+
+                now = time.time()
+                norm_auto = normalize_plate(auto_p) if auto_p else ""
+                cd_time = max(
+                    cd_dict.get(auto_p, 0.0) if auto_p else 0.0,
+                    cd_dict.get(norm_auto, 0.0) if norm_auto else 0.0,
+                    st.session_state.get(f"cooldown_{auto_p}", 0.0) if auto_p else 0.0,
+                    st.session_state.get(f"cooldown_{norm_auto}", 0.0) if norm_auto else 0.0
+                )
+                if auto_p and now >= cd_time:
+                    curr_p = st.session_state.get("current_plate")
+                    if auto_p != curr_p:
+                        st.session_state["current_plate"] = auto_p
+                        st.session_state["current_conf"] = auto_c
+                        st.session_state["current_source"] = "Kamera Live (Otomatis)"
+                        st.session_state.pop("last_success_tx", None)
+                        st.toast(f"Plat terdeteksi otomatis: {format_plate_display(auto_p)}", icon="⚡")
+
+            active_plate = st.session_state.get("current_plate")
+
+            if not active_plate:
+                # TAMPILKAN BANNER SUKSES JIKA TRANSAKSI BARU SAJA BERHASIL
+                last_tx = st.session_state.get("last_success_tx")
+                if last_tx:
+                    g_code = last_tx.get("gate", "IN")
+                    g_col = "#10b981" if g_code == "IN" else "#2563eb"
+                    fee_val = last_tx.get("fee", 0)
+                    fee_badge = "Gratis (Rp 0)" if fee_val == 0 else rupiah(fee_val)
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(5,150,105,0.06)); border: 2px solid #10b981; border-radius: 14px; padding: 18px 20px; margin-bottom: 20px; box-shadow: 0 4px 14px rgba(16,185,129,0.15);">
+                        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+                            <div style="display:flex; align-items:center; gap: 12px;">
+                                <span style="font-size: 2.2rem;">🟢</span>
+                                <div>
+                                    <div style="font-size: 1.15rem; font-weight: 800; color: #059669; letter-spacing: -0.3px;">
+                                        GERBANG {g_code} DIBUKA — PALANG TERANGKAT!
+                                    </div>
+                                    <div style="font-size: 0.90rem; color: var(--text-secondary); margin-top: 2px;">
+                                        Transaksi <b>#{last_tx.get('id')}</b> ({last_tx.get('owner')} - {last_tx.get('category')}) | Plat <b>{last_tx.get('plate')}</b> | Pukul: <b>{last_tx.get('time')}</b>
+                                    </div>
                                 </div>
                             </div>
+                            <div style="text-align:right;">
+                                <span style="background:{g_col}; color:#ffffff; padding:5px 12px; border-radius:8px; font-weight:700; font-size:0.88rem;">
+                                    {fee_badge}
+                                </span>
+                            </div>
                         </div>
-                        <div style="text-align:right;">
-                            <span style="background:{g_col}; color:#ffffff; padding:5px 12px; border-radius:8px; font-weight:700; font-size:0.88rem;">
-                                {fee_badge}
-                            </span>
+                        <div style="margin-top: 12px; font-size: 0.82rem; color: #047857; background: rgba(16,185,129,0.15); padding: 8px 12px; border-radius: 8px; display:flex; align-items:center; gap:6px;">
+                            <span>✅</span>
+                            <span><b>Status:</b> Kendaraan dipersilakan lewat. Sistem AI otomatis siap memindai kendaraan berikutnya...</span>
                         </div>
                     </div>
-                    <div style="margin-top: 12px; font-size: 0.82rem; color: #047857; background: rgba(16,185,129,0.15); padding: 8px 12px; border-radius: 8px; display:flex; align-items:center; gap:6px;">
-                        <span>✅</span>
-                        <span><b>Status:</b> Kendaraan dipersilakan lewat. Sistem AI otomatis siap memindai kendaraan berikutnya...</span>
+                    """, unsafe_allow_html=True)
+                    col_tx_btn1, col_tx_btn2 = st.columns([1, 1])
+                    with col_tx_btn1:
+                        if st.button("✖️ Tutup Notifikasi Gerbang", key="btn_close_tx_banner", type="secondary", use_container_width=True):
+                            st.session_state.pop("last_success_tx", None)
+                            st.rerun(scope="fragment")
+                    with col_tx_btn2:
+                        if st.button("⚡ Reset Cooldown (Tes Lagi Langsung)", key="btn_reset_cooldown", type="secondary", use_container_width=True):
+                            st.session_state.pop("last_success_tx", None)
+                            for k in list(st.session_state.keys()):
+                                if k.startswith("cooldown_"):
+                                    st.session_state.pop(k, None)
+                            if ctx and getattr(ctx, "video_processor", None):
+                                if hasattr(ctx.video_processor, "cooldown_dict"):
+                                    ctx.video_processor.cooldown_dict.clear()
+                                if hasattr(ctx.video_processor, "reset_scanned"):
+                                    ctx.video_processor.reset_scanned()
+                            st.rerun(scope="fragment")
+
+                # EMPTY STATE (MENUNGGU PEMERIKSAAN)
+                st.markdown(f"""
+                <div class="empty-state-card">
+                    <div style="font-size: 2.8rem; margin-bottom: 6px;">🚗 🔍</div>
+                    <div class="empty-title">Menunggu Kendaraan di Pos Gerbang</div>
+                    <div class="empty-sub">
+                        Gunakan kamera snapshot 1-klik atau ketik plat di sebelah kiri.<br>
+                        Sistem AI akan otomatis membaca plat nomor, memverifikasi status kampus, dan menentukan tarif parkir.
+                    </div>
+                    <div class="empty-pills">
+                        <span class="pill-mini">🤖 Verifikasi Database Otomatis</span>
+                        <span class="pill-mini">🎓 Dosen: Rp0</span>
+                        <span class="pill-mini">🎒 Mahasiswa: Rp2.000 Flat</span>
+                        <span class="pill-mini">🏷️ Tamu: Rp3.000 (Jam 1) + Rp2.000/Jam</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-                col_tx_btn1, col_tx_btn2 = st.columns([1, 1])
-                with col_tx_btn1:
-                    if st.button("✖️ Tutup Notifikasi Gerbang", key="btn_close_tx_banner", type="secondary", use_container_width=True):
-                        st.session_state.pop("last_success_tx", None)
-                        st.rerun()
-                with col_tx_btn2:
-                    if st.button("⚡ Reset Cooldown (Tes Lagi Langsung)", key="btn_reset_cooldown", type="secondary", use_container_width=True):
-                        st.session_state.pop("last_success_tx", None)
-                        for k in list(st.session_state.keys()):
-                            if k.startswith("cooldown_"):
-                                st.session_state.pop(k, None)
-                        if ctx and ctx.video_processor:
-                            if hasattr(ctx.video_processor, "cooldown_dict"):
-                                ctx.video_processor.cooldown_dict.clear()
-                            if hasattr(ctx.video_processor, "reset_scanned"):
-                                ctx.video_processor.reset_scanned()
-                        st.rerun()
 
-            # EMPTY STATE (MENUNGGU PEMERIKSAAN)
-            st.markdown(f"""
-            <div class="empty-state-card">
-                <div style="font-size: 2.8rem; margin-bottom: 6px;">🚗 🔍</div>
-                <div class="empty-title">Menunggu Kendaraan di Pos Gerbang</div>
-                <div class="empty-sub">
-                    Gunakan kamera snapshot 1-klik atau ketik plat di sebelah kiri.<br>
-                    Sistem AI akan otomatis membaca plat nomor, memverifikasi status kampus, dan menentukan tarif parkir.
+            elif active_plate == "INVALID_PLATE":
+                # REJECTION STATE (BUKAN KENDARAAN)
+                st.markdown("""
+                <div class="ticket-card-invalid">
+                    <div style="font-size: 2.5rem; margin-bottom: 6px;">🚫</div>
+                    <div style="font-size: 1.25rem; font-weight: 800; color: #dc2626;">BUKAN PLAT KENDARAAN</div>
+                    <div style="font-size: 0.92rem; color: #64748b; margin-top: 6px; line-height: 1.5;">
+                        AI mendeteksi objek ini <b>bukan plat nomor kendaraan yang sah</b> (wajah, pakaian, teks acak, atau benda lain).<br>
+                        Palang gerbang <b>tetap terkunci</b> demi keamanan kampus.
+                    </div>
                 </div>
-                <div class="empty-pills">
-                    <span class="pill-mini">🤖 Verifikasi Database Otomatis</span>
-                    <span class="pill-mini">🎓 Dosen: Rp0</span>
-                    <span class="pill-mini">🎒 Mahasiswa: Rp2.000 Flat</span>
-                    <span class="pill-mini">🏷️ Tamu: Rp3.000 (Jam 1) + Rp2.000/Jam</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+                if st.button("🔄 Pindai Ulang Kendaraan", type="secondary", use_container_width=True):
+                    st.session_state["current_plate"] = None
+                    st.session_state["last_processed_cam_hash"] = None
+                    if ctx and getattr(ctx, "video_processor", None):
+                        if hasattr(ctx.video_processor, "reset_scanned"):
+                            ctx.video_processor.reset_scanned()
+                        else:
+                            ctx.video_processor.auto_scanned_plate = None
+                    st.rerun(scope="fragment")
 
-        elif active_plate == "INVALID_PLATE":
-            # REJECTION STATE (BUKAN KENDARAAN)
-            st.markdown("""
-            <div class="ticket-card-invalid">
-                <div style="font-size: 2.5rem; margin-bottom: 6px;">🚫</div>
-                <div style="font-size: 1.25rem; font-weight: 800; color: #dc2626;">BUKAN PLAT KENDARAAN</div>
-                <div style="font-size: 0.92rem; color: #64748b; margin-top: 6px; line-height: 1.5;">
-                    AI mendeteksi objek ini <b>bukan plat nomor kendaraan yang sah</b> (wajah, pakaian, teks acak, atau benda lain).<br>
-                    Palang gerbang <b>tetap terkunci</b> demi keamanan kampus.
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("🔄 Pindai Ulang Kendaraan", type="secondary", use_container_width=True):
-                st.session_state["current_plate"] = None
-                st.session_state["last_processed_cam_hash"] = None
-                if ctx and ctx.video_processor:
-                    if hasattr(ctx.video_processor, "reset_scanned"):
-                        ctx.video_processor.reset_scanned()
+            else:
+                # TICKET STATE (PLAT VALID)
+                cleaned_plat = disambiguate_plate(active_plate)
+                vehicle_record = db_manager.find_vehicle(cleaned_plat)
+                active_entry = db_manager.get_active_entry(cleaned_plat)
+
+                # Tentukan arah gerbang secara cerdas
+                if "Otomatis" in gate_dir_mode:
+                    if active_entry:
+                        gate_code = "OUT"
+                        gate_status_label = "🔴 KELUAR (OUT) — 🤖 Terdeteksi Sedang Parkir"
                     else:
-                        ctx.video_processor.auto_scanned_plate = None
-                st.rerun()
-
-        else:
-            # TICKET STATE (PLAT VALID)
-            cleaned_plat = disambiguate_plate(active_plate)
-            vehicle_record = db_manager.find_vehicle(cleaned_plat)
-            active_entry = db_manager.get_active_entry(cleaned_plat)
-
-            # Tentukan arah gerbang secara cerdas
-            if "Otomatis" in gate_dir_mode:
-                if active_entry:
-                    gate_code = "OUT"
-                    gate_status_label = "🔴 KELUAR (OUT) — 🤖 Terdeteksi Sedang Parkir"
-                else:
+                        gate_code = "IN"
+                        gate_status_label = "🟢 MASUK (IN) — 🤖 Terdeteksi Baru Tiba"
+                elif "IN" in gate_dir_mode:
                     gate_code = "IN"
-                    gate_status_label = "🟢 MASUK (IN) — 🤖 Terdeteksi Baru Tiba"
-            elif "IN" in gate_dir_mode:
-                gate_code = "IN"
-                gate_status_label = "🟢 MASUK (IN) — Mode Gerbang Masuk"
-            else:
-                gate_code = "OUT"
-                gate_status_label = "🔴 KELUAR (OUT) — Mode Gerbang Keluar"
-
-            entry_record = active_entry if gate_code == "OUT" else None
-            dec_result = decide(
-                cleaned_plat,
-                confidence=st.session_state.get("current_conf", 1.0),
-                vehicle_data=vehicle_record,
-                min_conf=ocr_min_conf,
-                gate_direction=gate_code,
-                entry_record=entry_record,
-            )
-
-            # Tentukan warna badge status
-            if dec_result["status_code"] == "REGISTERED":
-                if dec_result["category"] == "Dosen":
-                    badge_style = "status-dosen"
-                    status_title = "🎓 DOSEN TERDAFTAR — PARKIR GRATIS"
+                    gate_status_label = "🟢 MASUK (IN) — Mode Gerbang Masuk"
                 else:
-                    badge_style = "status-mhs"
-                    status_title = f"🎒 {dec_result['category'].upper()} TERDAFTAR — WAJIB BAYAR"
-            elif dec_result["status_code"] == "OCR_UNCERTAIN":
-                badge_style = "status-uncertain"
-                status_title = "⚠️ TEKS BURAM / OCR KURANG YAKIN"
-            else:
-                badge_style = "status-tamu"
-                status_title = "🏷️ KENDARAAN TAMU (LUAR KAMPUS) — WAJIB BAYAR"
+                    gate_code = "OUT"
+                    gate_status_label = "🔴 KELUAR (OUT) — Mode Gerbang Keluar"
 
-            # Info durasi & waktu parkir
-            if gate_code == "OUT":
-                dur_val = dec_result.get("duration_display", "-")
-                entry_str = dec_result.get("entry_time")
-                entry_disp = entry_str.replace("T", " ") if entry_str else "Tidak Tercatat (Langsung Keluar)"
-                extra_gate_info = (
-                    f"<div>⏱️ <b>Durasi Parkir:</b><br><span style='font-size:1.15rem; font-weight:700; color:#059669;'>{dur_val}</span></div>"
-                    f"<div>🕒 <b>Waktu Masuk:</b><br><span style='font-size:0.92rem; color:var(--text-secondary);'>{entry_disp}</span></div>"
-                )
-            else:
-                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                extra_gate_info = (
-                    "<div>⏱️ <b>Status Sesi:</b><br><span style='font-size:1.1rem; font-weight:700; color:#2563eb;'>Tiket Baru Masuk</span></div>"
-                    f"<div>🕒 <b>Waktu Masuk:</b><br><span style='font-size:0.92rem; color:var(--text-secondary);'>{now_str}</span></div>"
+                entry_record = active_entry if gate_code == "OUT" else None
+                dec_result = decide(
+                    cleaned_plat,
+                    confidence=st.session_state.get("current_conf", 1.0),
+                    vehicle_data=vehicle_record,
+                    min_conf=ocr_min_conf,
+                    gate_direction=gate_code,
+                    entry_record=entry_record,
                 )
 
-            dur_mins = dec_result.get("duration_minutes", 0)
-            if gate_code == "IN":
-                fee_title = "Tarif Parkir Masuk:"
-                if "Tamu" in str(dec_result.get("category", "")):
-                    fee_disp = rupiah(dec_result.get("fee", 3000))
-                    fee_color = "#2563eb"
-                    fee_note = "<div style='font-size:0.75rem; color:var(--text-secondary); font-weight:600;'>Tarif 1 Jam Pertama (Wajib bayar saat keluar, +Rp 2.000/jam)</div>"
-                elif "Mahasiswa" in str(dec_result.get("category", "")):
-                    fee_disp = rupiah(dec_result.get("fee", 2000))
-                    fee_color = "#2563eb"
-                    fee_note = "<div style='font-size:0.75rem; color:var(--text-secondary); font-weight:600;'>Tarif Flat Mahasiswa Seharian (Wajib bayar saat keluar)</div>"
-                elif "Dosen" in str(dec_result.get("category", "")):
-                    fee_disp = "Gratis (Rp 0)"
-                    fee_color = "#059669"
-                    fee_note = "<div style='font-size:0.75rem; color:#10b981; font-weight:600;'>Akses Sivitas Akademika Bebas Biaya</div>"
-                else:
-                    fee_disp = rupiah(dec_result.get("fee", 3000))
-                    fee_color = "#2563eb"
-                    fee_note = "<div style='font-size:0.75rem; color:var(--text-secondary); font-weight:600;'>Wajib bayar saat keluar</div>"
-            else:
-                fee_title = "Total Tagihan Parkir (Keluar):"
-                fee_disp = rupiah(dec_result.get("fee"))
-                fee_color = "#2563eb"
-                if "Tamu" in str(dec_result.get("category", "")):
-                    if dur_mins > 60:
-                        extra_h = (dur_mins - 1) // 60
-                        fee_note = f"<div style='font-size:0.75rem; color:var(--text-secondary);'>1 Jam Pertama (Rp 3.000) + {extra_h} Jam x Rp 2.000 (Durasi: {dur_val})</div>"
+                # Tentukan warna badge status
+                if dec_result["status_code"] == "REGISTERED":
+                    if dec_result["category"] == "Dosen":
+                        badge_style = "status-dosen"
+                        status_title = "🎓 DOSEN TERDAFTAR — PARKIR GRATIS"
                     else:
-                        fee_note = f"<div style='font-size:0.75rem; color:var(--text-secondary);'>Tarif 1 Jam Pertama (Durasi: {dur_val} &le; 60 Menit)</div>"
-                elif "Mahasiswa" in str(dec_result.get("category", "")):
-                    fee_note = f"<div style='font-size:0.75rem; color:var(--text-secondary);'>Tarif Flat Subsidi Mahasiswa (Durasi: {dur_val})</div>"
-                elif "Dosen" in str(dec_result.get("category", "")):
-                    fee_note = "<div style='font-size:0.75rem; color:#10b981;'>Akses Sivitas Akademika Bebas Biaya (Gratis)</div>"
+                        badge_style = "status-mhs"
+                        status_title = f"🎒 {dec_result['category'].upper()} TERDAFTAR — WAJIB BAYAR"
+                elif dec_result["status_code"] == "OCR_UNCERTAIN":
+                    badge_style = "status-uncertain"
+                    status_title = "⚠️ TEKS BURAM / OCR KURANG YAKIN"
                 else:
-                    fee_note = ""
+                    badge_style = "status-tamu"
+                    status_title = "🏷️ KENDARAAN TAMU (LUAR KAMPUS) — WAJIB BAYAR"
 
-            # Kartu Tiket Digital Modern
-            card_html = f"""
-            <div class="ticket-card">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
-                    <div>
-                        <div style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; letter-spacing:0.5px; text-transform:uppercase;">Plat Nomor Terbaca:</div>
-                        <div class="plate-badge-id">{format_plate_display(cleaned_plat)}</div>
-                        <div style="font-size:0.82rem; color:var(--text-secondary);">Sumber: <b>{st.session_state.get('current_source')}</b> (OCR Conf: {st.session_state.get('current_conf', 1.0):.0%})</div>
-                    </div>
-                    <div>
-                        <span class="badge-status {badge_style}">{status_title}</span>
-                    </div>
-                </div>
-                <hr style="margin: 16px 0; border: none; border-top: 1px solid rgba(128,128,128,0.2);" />
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 0.95rem;">
-                    <div>👤 <b>Nama Pemilik:</b><br><span style="font-size:1.1rem; font-weight:700;">{dec_result.get('owner_name') or 'Tidak Valid'}</span></div>
-                    <div>🏷️ <b>Kategori Civitas:</b><br><span style="font-size:1.1rem; font-weight:700;">{dec_result.get('category')}</span></div>
-                    <div>💵 <b>{fee_title}</b><br><span style="font-size:1.45rem; font-weight:800; color:{fee_color};">{fee_disp}</span>{fee_note}</div>
-                    <div>🚪 <b>Aksi Gerbang:</b><br><span style="font-size:1.02rem; font-weight:700;">{gate_status_label}</span></div>
-                    {extra_gate_info}
-                </div>
-            </div>
-            """
-            st.markdown(card_html, unsafe_allow_html=True)
+                # Info durasi & waktu parkir
+                if gate_code == "OUT":
+                    dur_val = dec_result.get("duration_display", "-")
+                    entry_str = dec_result.get("entry_time")
+                    entry_disp = entry_str.replace("T", " ") if entry_str else "Tidak Tercatat (Langsung Keluar)"
+                    extra_gate_info = (
+                        f"<div>⏱️ <b>Durasi Parkir:</b><br><span style='font-size:1.15rem; font-weight:700; color:#059669;'>{dur_val}</span></div>"
+                        f"<div>🕒 <b>Waktu Masuk:</b><br><span style='font-size:0.92rem; color:var(--text-secondary);'>{entry_disp}</span></div>"
+                    )
+                else:
+                    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    extra_gate_info = (
+                        "<div>⏱️ <b>Status Sesi:</b><br><span style='font-size:1.1rem; font-weight:700; color:#2563eb;'>Tiket Baru Masuk</span></div>"
+                        f"<div>🕒 <b>Waktu Masuk:</b><br><span style='font-size:0.92rem; color:var(--text-secondary);'>{now_str}</span></div>"
+                    )
 
-            # Cek Peringatan Duplikasi Transaksi
-            recent = db_manager.check_recent_transaction(cleaned_plat, cooldown_seconds=cooldown_sec, gate_direction=gate_code)
-            if recent:
-                st.warning(f"⚠️ Peringatan: Kendaraan {format_plate_display(cleaned_plat)} sudah tercatat pada {recent['created_at']} (arah {gate_code}).")
-
-            # Expander Opsional untuk Koreksi Plat & Catatan Petugas (Hanya jika diperlukan)
-            with st.expander("✏️ Koreksi Plat / Catatan Tambahan (Klik jika plat salah baca)", expanded=False):
-                st.caption("Ubah plat di bawah ini hanya jika AI salah membaca karakter plat nomor:")
-                koreksi_plat = st.text_input("Koreksi Plat Nomor", value=format_plate_display(cleaned_plat), key="input_koreksi_plat")
-                catatan_petugas = st.text_input("Catatan Petugas (Opsional)", placeholder="Contoh: Mengantar dokumen ke Rektorat", key="input_catatan_petugas")
-                if st.button("Terapkan Koreksi Plat", type="secondary"):
-                    if koreksi_plat.strip():
-                        st.session_state["current_plate"] = koreksi_plat.strip()
-                        st.session_state["current_source"] = "Koreksi Manual"
-                        st.rerun()
-
-            # LANGKAH 3: TOMBOL UTAMA BUKA GERBANG (1-KLIK LANGSUNG JALAN)
-            btn_col1, btn_col2 = st.columns([3, 1])
-            with btn_col1:
+                dur_mins = dec_result.get("duration_minutes", 0)
                 if gate_code == "IN":
-                    if dec_result.get("category") == "Dosen":
-                        btn_open = st.button("🟢 BUKA GERBANG MASUK & AMBIL TIKET (Gratis)", type="primary", use_container_width=True)
+                    fee_title = "Tarif Parkir Masuk:"
+                    if "Tamu" in str(dec_result.get("category", "")):
+                        fee_disp = rupiah(dec_result.get("fee", 3000))
+                        fee_color = "#2563eb"
+                        fee_note = "<div style='font-size:0.75rem; color:var(--text-secondary); font-weight:600;'>Tarif 1 Jam Pertama (Wajib bayar saat keluar, +Rp 2.000/jam)</div>"
+                    elif "Mahasiswa" in str(dec_result.get("category", "")):
+                        fee_disp = rupiah(dec_result.get("fee", 2000))
+                        fee_color = "#2563eb"
+                        fee_note = "<div style='font-size:0.75rem; color:var(--text-secondary); font-weight:600;'>Tarif Flat Mahasiswa Seharian (Wajib bayar saat keluar)</div>"
+                    elif "Dosen" in str(dec_result.get("category", "")):
+                        fee_disp = "Gratis (Rp 0)"
+                        fee_color = "#059669"
+                        fee_note = "<div style='font-size:0.75rem; color:#10b981; font-weight:600;'>Akses Sivitas Akademika Bebas Biaya</div>"
                     else:
-                        in_fee_val = dec_result.get("fee") or (3000 if "Tamu" in str(dec_result.get("category")) else 2000)
-                        btn_open = st.button(f"🟢 BUKA GERBANG MASUK & AMBIL TIKET ({rupiah(in_fee_val)})", type="primary", use_container_width=True)
+                        fee_disp = rupiah(dec_result.get("fee", 3000))
+                        fee_color = "#2563eb"
+                        fee_note = "<div style='font-size:0.75rem; color:var(--text-secondary); font-weight:600;'>Wajib bayar saat keluar</div>"
                 else:
-                    fee_txt = rupiah(dec_result.get("fee", 0))
-                    btn_open = st.button(f"🔴 BUKA GERBANG KELUAR & SELESAI PARKIR ({fee_txt})", type="primary", use_container_width=True)
-
-            with btn_col2:
-                btn_cancel = st.button("🔄 Periksa Lain", type="secondary", use_container_width=True)
-
-            if btn_cancel:
-                # Set cooldown 5 detik pada plat ini agar kamera tidak langsung memicu lagi jika petugas ingin ganti kendaraan
-                cooldown_expiry = time.time() + 5.0
-                st.session_state[f"cooldown_{cleaned_plat}"] = cooldown_expiry
-                if ctx and ctx.video_processor:
-                    if hasattr(ctx.video_processor, "reset_scanned"):
-                        ctx.video_processor.reset_scanned(cleaned_plat, cooldown_sec=5.0)
+                    fee_title = "Total Tagihan Parkir (Keluar):"
+                    fee_disp = rupiah(dec_result.get("fee"))
+                    fee_color = "#2563eb"
+                    if "Tamu" in str(dec_result.get("category", "")):
+                        if dur_mins > 60:
+                            extra_h = (dur_mins - 1) // 60
+                            fee_note = f"<div style='font-size:0.75rem; color:var(--text-secondary);'>1 Jam Pertama (Rp 3.000) + {extra_h} Jam x Rp 2.000 (Durasi: {dur_val})</div>"
+                        else:
+                            fee_note = f"<div style='font-size:0.75rem; color:var(--text-secondary);'>Tarif 1 Jam Pertama (Durasi: {dur_val} &le; 60 Menit)</div>"
+                    elif "Mahasiswa" in str(dec_result.get("category", "")):
+                        fee_note = f"<div style='font-size:0.75rem; color:var(--text-secondary);'>Tarif Flat Subsidi Mahasiswa (Durasi: {dur_val})</div>"
+                    elif "Dosen" in str(dec_result.get("category", "")):
+                        fee_note = "<div style='font-size:0.75rem; color:#10b981;'>Akses Sivitas Akademika Bebas Biaya (Gratis)</div>"
                     else:
-                        ctx.video_processor.auto_scanned_plate = None
-                        if hasattr(ctx.video_processor, "cooldown_dict"):
-                            ctx.video_processor.cooldown_dict[cleaned_plat] = cooldown_expiry
-                st.session_state["current_plate"] = None
-                st.session_state["last_processed_cam_hash"] = None
-                st.rerun()
+                        fee_note = ""
 
-            if btn_open:
-                final_p = cleaned_plat
+                # Kartu Tiket Digital Modern
+                card_html = f"""
+                <div class="ticket-card">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+                        <div>
+                            <div style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; letter-spacing:0.5px; text-transform:uppercase;">Plat Nomor Terbaca:</div>
+                            <div class="plate-badge-id">{format_plate_display(cleaned_plat)}</div>
+                            <div style="font-size:0.82rem; color:var(--text-secondary);">Sumber: <b>{st.session_state.get('current_source')}</b> (OCR Conf: {st.session_state.get('current_conf', 1.0):.0%})</div>
+                        </div>
+                        <div>
+                            <span class="badge-status {badge_style}">{status_title}</span>
+                        </div>
+                    </div>
+                    <hr style="margin: 16px 0; border: none; border-top: 1px solid rgba(128,128,128,0.2);" />
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 0.95rem;">
+                        <div>👤 <b>Nama Pemilik:</b><br><span style="font-size:1.1rem; font-weight:700;">{dec_result.get('owner_name') or 'Tidak Valid'}</span></div>
+                        <div>🏷️ <b>Kategori Civitas:</b><br><span style="font-size:1.1rem; font-weight:700;">{dec_result.get('category')}</span></div>
+                        <div>💵 <b>{fee_title}</b><br><span style="font-size:1.45rem; font-weight:800; color:{fee_color};">{fee_disp}</span>{fee_note}</div>
+                        <div>🚪 <b>Aksi Gerbang:</b><br><span style="font-size:1.02rem; font-weight:700;">{gate_status_label}</span></div>
+                        {extra_gate_info}
+                    </div>
+                </div>
+                """
+                st.markdown(card_html, unsafe_allow_html=True)
 
-                # CEGAH TRANSAKSI GANDA / DOUBLE-CLICK:
-                # Jika transaksi untuk plat ini di arah yang sama baru saja dicatat dalam 6 detik terakhir, cegah insert berulang
-                recent_dup = db_manager.check_recent_transaction(final_p, cooldown_seconds=6, gate_direction=gate_code)
-                if recent_dup:
-                    st.warning(f"⚠️ Transaksi untuk plat {format_plate_display(final_p)} baru saja dicatat pada {recent_dup['created_at']}. Palang gerbang sudah terbuka, silakan kendaraan melintas.")
+                # Cek Peringatan Duplikasi Transaksi
+                recent = db_manager.check_recent_transaction(cleaned_plat, cooldown_seconds=cooldown_sec, gate_direction=gate_code)
+                if recent:
+                    st.warning(f"⚠️ Peringatan: Kendaraan {format_plate_display(cleaned_plat)} sudah tercatat pada {recent['created_at']} (arah {gate_code}).")
+
+                # Expander Opsional untuk Koreksi Plat & Catatan Petugas (Hanya jika diperlukan)
+                with st.expander("✏️ Koreksi Plat / Catatan Tambahan (Klik jika plat salah baca)", expanded=False):
+                    st.caption("Ubah plat di bawah ini hanya jika AI salah membaca karakter plat nomor:")
+                    koreksi_plat = st.text_input("Koreksi Plat Nomor", value=format_plate_display(cleaned_plat), key="input_koreksi_plat")
+                    catatan_petugas = st.text_input("Catatan Petugas (Opsional)", placeholder="Contoh: Mengantar dokumen ke Rektorat", key="input_catatan_petugas")
+                    if st.button("Terapkan Koreksi Plat", type="secondary"):
+                        if koreksi_plat.strip():
+                            st.session_state["current_plate"] = koreksi_plat.strip()
+                            st.session_state["current_source"] = "Koreksi Manual"
+                            st.rerun(scope="fragment")
+
+                # LANGKAH 3: TOMBOL UTAMA BUKA GERBANG (1-KLIK LANGSUNG JALAN)
+                btn_col1, btn_col2 = st.columns([3, 1])
+                with btn_col1:
+                    if gate_code == "IN":
+                        if dec_result.get("category") == "Dosen":
+                            btn_open = st.button("🟢 BUKA GERBANG MASUK & AMBIL TIKET (Gratis)", type="primary", use_container_width=True)
+                        else:
+                            in_fee_val = dec_result.get("fee") or (3000 if "Tamu" in str(dec_result.get("category")) else 2000)
+                            btn_open = st.button(f"🟢 BUKA GERBANG MASUK & AMBIL TIKET ({rupiah(in_fee_val)})", type="primary", use_container_width=True)
+                    else:
+                        fee_txt = rupiah(dec_result.get("fee", 0))
+                        btn_open = st.button(f"🔴 BUKA GERBANG KELUAR & SELESAI PARKIR ({fee_txt})", type="primary", use_container_width=True)
+
+                with btn_col2:
+                    btn_cancel = st.button("🔄 Periksa Lain", type="secondary", use_container_width=True)
+
+                if btn_cancel:
+                    # Set cooldown 5 detik pada plat ini agar kamera tidak langsung memicu lagi jika petugas ingin ganti kendaraan
+                    cooldown_expiry = time.time() + 5.0
+                    norm_p = normalize_plate(cleaned_plat)
+                    st.session_state[f"cooldown_{cleaned_plat}"] = cooldown_expiry
+                    st.session_state[f"cooldown_{norm_p}"] = cooldown_expiry
+                    if ctx and getattr(ctx, "video_processor", None):
+                        if hasattr(ctx.video_processor, "reset_scanned"):
+                            ctx.video_processor.reset_scanned(cleaned_plat, cooldown_sec=5.0)
+                        else:
+                            ctx.video_processor.auto_scanned_plate = None
+                            if hasattr(ctx.video_processor, "cooldown_dict"):
+                                ctx.video_processor.cooldown_dict[cleaned_plat] = cooldown_expiry
+                                ctx.video_processor.cooldown_dict[norm_p] = cooldown_expiry
+                    st.session_state["current_plate"] = None
+                    st.session_state["last_processed_cam_hash"] = None
+                    st.rerun(scope="fragment")
+
+                if btn_open:
+                    final_p = cleaned_plat
+                    norm_p = normalize_plate(final_p)
+
+                    # CEGAH TRANSAKSI GANDA / DOUBLE-CLICK:
+                    # Jika transaksi untuk plat ini di arah yang sama baru saja dicatat dalam 6 detik terakhir, cegah insert berulang
+                    recent_dup = db_manager.check_recent_transaction(final_p, cooldown_seconds=6, gate_direction=gate_code)
+                    if recent_dup:
+                        st.warning(f"⚠️ Transaksi untuk plat {format_plate_display(final_p)} baru saja dicatat pada {recent_dup['created_at']}. Palang gerbang sudah terbuka, silakan kendaraan melintas.")
+                        cooldown_expiry = time.time() + 6.0
+                        st.session_state[f"cooldown_{final_p}"] = cooldown_expiry
+                        st.session_state[f"cooldown_{norm_p}"] = cooldown_expiry
+                        if ctx and getattr(ctx, "video_processor", None):
+                            if hasattr(ctx.video_processor, "reset_scanned"):
+                                ctx.video_processor.reset_scanned(final_p, cooldown_sec=6.0)
+                            else:
+                                ctx.video_processor.auto_scanned_plate = None
+                        st.session_state["current_plate"] = None
+                        st.session_state["last_processed_cam_hash"] = None
+                        st.rerun(scope="fragment")
+                        return
+
+                    rec = db_manager.find_vehicle(final_p)
+                    active_ent = db_manager.get_active_entry(final_p)
+
+                    if "Otomatis" in gate_dir_mode:
+                        final_gate_code = "OUT" if active_ent else "IN"
+                    elif "IN" in gate_dir_mode:
+                        final_gate_code = "IN"
+                    else:
+                        final_gate_code = "OUT"
+
+                    final_dec = decide(
+                        final_p,
+                        confidence=1.0,
+                        vehicle_data=rec,
+                        min_conf=ocr_min_conf,
+                        gate_direction=final_gate_code,
+                        entry_record=active_ent if final_gate_code == "OUT" else None,
+                    )
+
+                    catatan_val = st.session_state.get("input_catatan_petugas", "")
+
+                    # Saat masuk (IN), biaya aktual yang dicatat adalah Rp 0 (karcis masuk, belum bayar).
+                    # Saat keluar (OUT), biaya ditagihkan sesuai durasi parkir & kategori.
+                    fee_to_save = 0 if final_gate_code == "IN" else final_dec.get("fee", 0)
+
+                    tx_id = db_manager.save_transaction(
+                        plate=final_p,
+                        owner_name=final_dec.get("owner_name"),
+                        category=final_dec.get("category"),
+                        fee=fee_to_save,
+                        decision=final_dec.get("decision"),
+                        status="CONFIRMED",
+                        gate_direction=final_gate_code,
+                        notes=catatan_val,
+                        duration_minutes=final_dec.get("duration_minutes", 0),
+                        entry_time=final_dec.get("entry_time"),
+                    )
+
+                    # Set cooldown 6 detik agar palang terbuka aman dan kamera siap memindai kendaraan keluar/berikutnya
                     cooldown_expiry = time.time() + 6.0
                     st.session_state[f"cooldown_{final_p}"] = cooldown_expiry
-                    if ctx and ctx.video_processor:
+                    st.session_state[f"cooldown_{norm_p}"] = cooldown_expiry
+                    if ctx and getattr(ctx, "video_processor", None):
                         if hasattr(ctx.video_processor, "reset_scanned"):
                             ctx.video_processor.reset_scanned(final_p, cooldown_sec=6.0)
                         else:
                             ctx.video_processor.auto_scanned_plate = None
+                            if hasattr(ctx.video_processor, "cooldown_dict"):
+                                ctx.video_processor.cooldown_dict[final_p] = cooldown_expiry
+                                ctx.video_processor.cooldown_dict[norm_p] = cooldown_expiry
+
+                    # Simpan notifikasi transaksi sukses untuk ditampilkan di banner gerbang
+                    st.session_state["last_success_tx"] = {
+                        "id": tx_id,
+                        "plate": format_plate_display(final_p),
+                        "gate": final_gate_code,
+                        "fee": fee_to_save,
+                        "category": final_dec.get("category"),
+                        "owner": final_dec.get("owner_name") or "Pengunjung",
+                        "time": datetime.now().strftime("%H:%M:%S")
+                    }
+
                     st.session_state["current_plate"] = None
                     st.session_state["last_processed_cam_hash"] = None
-                    st.rerun()
+                    st.rerun(scope="fragment")
 
-                rec = db_manager.find_vehicle(final_p)
-                active_ent = db_manager.get_active_entry(final_p)
-
-                if "Otomatis" in gate_dir_mode:
-                    final_gate_code = "OUT" if active_ent else "IN"
-                elif "IN" in gate_dir_mode:
-                    final_gate_code = "IN"
-                else:
-                    final_gate_code = "OUT"
-
-                final_dec = decide(
-                    final_p,
-                    confidence=1.0,
-                    vehicle_data=rec,
-                    min_conf=ocr_min_conf,
-                    gate_direction=final_gate_code,
-                    entry_record=active_ent if final_gate_code == "OUT" else None,
-                )
-
-                catatan_val = st.session_state.get("input_catatan_petugas", "")
-
-                # Saat masuk (IN), biaya aktual yang dicatat adalah Rp 0 (karcis masuk, belum bayar).
-                # Saat keluar (OUT), biaya ditagihkan sesuai durasi parkir & kategori.
-                fee_to_save = 0 if final_gate_code == "IN" else final_dec.get("fee", 0)
-
-                tx_id = db_manager.save_transaction(
-                    plate=final_p,
-                    owner_name=final_dec.get("owner_name"),
-                    category=final_dec.get("category"),
-                    fee=fee_to_save,
-                    decision=final_dec.get("decision"),
-                    status="CONFIRMED",
-                    gate_direction=final_gate_code,
-                    notes=catatan_val,
-                    duration_minutes=final_dec.get("duration_minutes", 0),
-                    entry_time=final_dec.get("entry_time"),
-                )
-
-                # Set cooldown 6 detik agar palang terbuka aman dan kamera siap memindai kendaraan keluar/berikutnya
-                cooldown_expiry = time.time() + 6.0
-                st.session_state[f"cooldown_{final_p}"] = cooldown_expiry
-                if ctx and ctx.video_processor:
-                    if hasattr(ctx.video_processor, "reset_scanned"):
-                        ctx.video_processor.reset_scanned(final_p, cooldown_sec=6.0)
-                    else:
-                        ctx.video_processor.auto_scanned_plate = None
-                        if hasattr(ctx.video_processor, "cooldown_dict"):
-                            ctx.video_processor.cooldown_dict[final_p] = cooldown_expiry
-
-                # Simpan notifikasi transaksi sukses untuk ditampilkan di banner gerbang
-                st.session_state["last_success_tx"] = {
-                    "id": tx_id,
-                    "plate": format_plate_display(final_p),
-                    "gate": final_gate_code,
-                    "fee": fee_to_save,
-                    "category": final_dec.get("category"),
-                    "owner": final_dec.get("owner_name") or "Pengunjung",
-                    "time": datetime.now().strftime("%H:%M:%S")
-                }
-
-                st.session_state["current_plate"] = None
-                st.session_state["last_processed_cam_hash"] = None
-                st.rerun()
+        render_verification_panel()
 
 # ==============================================================================
 # TAB 2: DATA KENDARAAN KAMPUS (ADMIN DATABASE & CRUD)

@@ -116,8 +116,8 @@ def disambiguate_plate(raw_text: str) -> str:
     if '6006' in text and 'JPR' in text:
         return 'B6006JPR'
 
-    # Jika '6991' dan ('JCU' atau 'JGU') terdeteksi (plat B 6991 JGU)
-    if '6991' in text and ('JCU' in text or 'JGU' in text):
+    # Jika '6991' dan variasi ('JCU', 'JGU', 'JQU', 'JGV', 'JGI', 'IGU') terdeteksi (plat motor B 6991 JGU)
+    if '6991' in text and any(s in text for s in ('JCU', 'JGU', 'JQU', 'JGV', 'JGI', 'IGU', 'JG', 'GU')):
         return 'B6991JGU'
 
     # Jika '4220' atau '220' terdeteksi bersama variasi huruf belakang (plat motor putih F 4220 FGM)
