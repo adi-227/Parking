@@ -84,17 +84,26 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
         # Koreksi migrasi: pastikan seluruh sesi masuk (IN) tercatat fee = 0 (karcis masuk, ditagih saat OUT)
         conn.execute("UPDATE transactions SET fee = 0 WHERE gate_direction = 'IN' AND fee > 0")
 
-        # Inisialisasi data sampel sivitas kampus resmi pada database utama agar langsung valid saat di-scan
+        # Inisialisasi data sampel sivitas kampus resmi pada database utama (hanya sekali saat setup awal)
         if os.path.abspath(db_path) == os.path.abspath(DEFAULT_DB_PATH):
             conn.execute("""
-                INSERT OR IGNORE INTO vehicles (plate, owner_name, category, created_at)
-                VALUES 
-                    ('B 6991 JGU', 'Randra (Mahasiswa)', 'Mahasiswa', '2026-11-02T17:00:00'),
-                    ('B 6802 JPN', 'Fikri (Mahasiswa)', 'Mahasiswa', '2026-10-12T17:15:00'),
-                    ('F 4526 FCF', 'Dr. Ahmad Suhendar', 'Dosen', '2026-10-12T17:15:00'),
-                    ('D 1234 ABC', 'Prof. Hendra Wijaya', 'Dosen', '2026-10-12T17:15:00'),
-                    ('B 1234 XYZ', 'Budi Santoso', 'Mahasiswa', '2026-10-12T17:15:00')
+                CREATE TABLE IF NOT EXISTS system_metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
             """)
+            meta_row = conn.execute("SELECT value FROM system_metadata WHERE key = 'initial_seed_done'").fetchone()
+            if not meta_row:
+                conn.execute("""
+                    INSERT OR IGNORE INTO vehicles (plate, owner_name, category, created_at)
+                    VALUES 
+                        ('B 6991 JGU', 'Randra (Mahasiswa)', 'Mahasiswa', '2026-11-02T17:00:00'),
+                        ('B 6802 JPN', 'Fikri (Mahasiswa)', 'Mahasiswa', '2026-10-12T17:15:00'),
+                        ('F 4526 FCF', 'Dr. Ahmad Suhendar', 'Dosen', '2026-10-12T17:15:00'),
+                        ('D 1234 ABC', 'Prof. Hendra Wijaya', 'Dosen', '2026-10-12T17:15:00'),
+                        ('B 1234 XYZ', 'Budi Santoso', 'Mahasiswa', '2026-10-12T17:15:00')
+                """)
+                conn.execute("INSERT OR REPLACE INTO system_metadata (key, value) VALUES ('initial_seed_done', 'true')")
 
 
 def upsert_vehicle(plate: str, owner_name: str, category: str, db_path: str = DEFAULT_DB_PATH) -> Tuple[bool, str]:
@@ -180,10 +189,19 @@ def update_vehicle(
 
 
 def delete_vehicle(plate: str, db_path: str = DEFAULT_DB_PATH) -> bool:
-    """Hapus kendaraan berdasarkan plat."""
+    """Hapus kendaraan berdasarkan plat (mendukung plat dengan atau tanpa spasi/normalisasi)."""
+    norm = normalize_plate(plate)
+    if not norm:
+        return False
     with get_connection(db_path) as conn:
-        res = conn.execute("DELETE FROM vehicles WHERE plate = ?", (plate,))
-        return res.rowcount > 0
+        rows = conn.execute("SELECT plate FROM vehicles").fetchall()
+        matched = [r["plate"] for r in rows if normalize_plate(r["plate"]) == norm]
+        if not matched:
+            res = conn.execute("DELETE FROM vehicles WHERE plate = ?", (plate,))
+            return res.rowcount > 0
+        for p in matched:
+            conn.execute("DELETE FROM vehicles WHERE plate = ?", (p,))
+        return True
 
 
 def find_vehicle(plate: str, db_path: str = DEFAULT_DB_PATH) -> Optional[Dict[str, Any]]:

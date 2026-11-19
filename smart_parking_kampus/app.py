@@ -2279,6 +2279,7 @@ with tab_vehicles:
                                 new_plate=new_plat_input,
                             )
                             if success:
+                                st.session_state.pop("select_edit_veh", None)
                                 st.success(f"✅ Data kendaraan {new_plat_input} berhasil diperbarui!")
                                 st.rerun()
                             else:
@@ -2309,10 +2310,16 @@ with tab_vehicles:
                 st.warning(f"⚠️ Perhatian: Anda akan menghapus data kendaraan **{format_plate_display(target_plat)}** dari database kampus.")
                 confirm_del = st.checkbox(f"Saya yakin ingin menghapus data kendaraan {format_plate_display(target_plat)}", key="chk_del_veh")
                 
-                if st.button("🗑️ Hapus Kendaraan Sekarang", type="secondary", disabled=not confirm_del, use_container_width=True):
-                    db_manager.delete_vehicle(target_plat)
-                    st.success(f"Kendaraan {format_plate_display(target_plat)} berhasil dihapus dari database.")
-                    st.rerun()
+                if st.button("🗑️ Hapus Kendaraan Sekarang", type="primary" if confirm_del else "secondary", disabled=not confirm_del, use_container_width=True):
+                    deleted = db_manager.delete_vehicle(target_plat)
+                    if deleted:
+                        st.session_state.pop("select_del_veh", None)
+                        st.session_state.pop("chk_del_veh", None)
+                        st.toast(f"Kendaraan {format_plate_display(target_plat)} berhasil dihapus!", icon="🗑️")
+                        st.success(f"✅ Kendaraan {format_plate_display(target_plat)} berhasil dihapus dari database kampus.")
+                        st.rerun()
+                    else:
+                        st.error(f"Gagal menghapus kendaraan {format_plate_display(target_plat)}. Plat tidak ditemukan di database.")
         else:
             st.info("Belum ada kendaraan terdaftar.")
 
